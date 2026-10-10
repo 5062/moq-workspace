@@ -1,0 +1,25 @@
+[submodule "moq-trace"]
+	path = moq-trace
+	url = https://github.com/5062/moq-trace.git
+	branch = main
+[submodule "relays/moq-dev-moq"]
+	path = relays/moq-dev-moq
+	url = https://github.com/5062/moq.git
+	branch = moq-trace
+[submodule "relays/cloudflare-moq-rs"]
+	path = relays/cloudflare-moq-rs
+	url = https://github.com/5062/moq-rs.git
+	branch = main
+[submodule "relays/google-quiche"]
+	path = relays/google-quiche
+	url = https://github.com/5062/quiche.git
+	branch = moq-trace
+	shallow = true
+[submodule "deps/quinn"]
+	path = deps/quinn
+	url = https://github.com/5062/quinn.git
+	branch = moq-trace/quinn-0.11
+[submodule "deps/web-transport"]
+	path = deps/web-transport
+	url = https://github.com/5062/web-transport.git
+	branch = moq-trace/web-transport-quinn-v0.11.11

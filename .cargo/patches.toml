@@ -1,0 +1,44 @@
+# Cargo config that builds every Cargo component against the pinned submodules:
+# `cargo build --config <workspace>/.cargo/patches.toml`.
+#
+# The name keeps Cargo from loading it on its own. Only `just` recipes pass it,
+# because a patch rewrites the consumer's Cargo.lock, and those recipes restore
+# the committed lockfile afterwards. A plain cargo build in a submodule builds
+# that fork exactly as it builds standalone.
+#
+# Paths are relative to the workspace root, the parent of this file's directory.
+#
+# A patch passed with --config takes precedence over the consumer's own
+# [patch.crates-io] for the same crate, which is how these replace the forks'
+# git branch and rev pins.
+
+# Quinn and web-transport require moq-trace from crates.io. The toolkit and
+# moq-dev-moq name its git repository directly. Both must resolve to the one
+# checkout, or the MoQ and transport hooks link two facades with unrelated
+# identifier spaces.
+[patch.crates-io]
+moq-trace = { path = "moq-trace/crates/moq-trace" }
+# Quinn takes quinn-udp by path, so the fork's copy comes with it.
+quinn = { path = "deps/quinn/quinn" }
+quinn-proto = { path = "deps/quinn/quinn-proto" }
+web-transport = { path = "deps/web-transport/rs/web-transport" }
+web-transport-quinn = { path = "deps/web-transport/rs/web-transport-quinn" }
+web-transport-trait = { path = "deps/web-transport/rs/web-transport-trait" }
+
+[patch."https://github.com/5062/moq-trace"]
+moq-trace = { path = "moq-trace/crates/moq-trace" }
+
+# The bench peers in moq-trace/moq-bench build against the moq implementation
+# under test, which is the pinned moq-dev-moq relay.
+[patch."https://github.com/5062/moq"]
+moq-native = { path = "relays/moq-dev-moq/rs/moq-native" }
+moq-net = { path = "relays/moq-dev-moq/rs/moq-net" }
+
+[patch."https://github.com/5062/quinn"]
+quinn = { path = "deps/quinn/quinn" }
+quinn-proto = { path = "deps/quinn/quinn-proto" }
+
+[patch."https://github.com/5062/web-transport"]
+web-transport = { path = "deps/web-transport/rs/web-transport" }
+web-transport-quinn = { path = "deps/web-transport/rs/web-transport-quinn" }
+web-transport-trait = { path = "deps/web-transport/rs/web-transport-trait" }
