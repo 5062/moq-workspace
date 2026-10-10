@@ -8,8 +8,9 @@ were checked together.
 |---|---|---|
 | `moq-trace/` | [5062/moq-trace](https://github.com/5062/moq-trace) | `main` |
 | `relays/moq-dev-moq/` | [5062/moq](https://github.com/5062/moq) | `moq-trace` |
-| `relays/cloudflare-moq-rs/` | [5062/moq-rs](https://github.com/5062/moq-rs) | `main` |
+| `relays/cloudflare-moq-rs/` | [5062/moq-rs](https://github.com/5062/moq-rs) | `moq-trace` |
 | `relays/google-quiche/` | [5062/quiche](https://github.com/5062/quiche) | `moq-trace` |
+| `relays/facebook-moxygen/` | [5062/moxygen](https://github.com/5062/moxygen) | `moq-trace` |
 | `deps/quinn/` | [5062/quinn](https://github.com/5062/quinn) | `moq-trace/quinn-0.11` |
 | `deps/web-transport/` | [5062/web-transport](https://github.com/5062/web-transport) | `moq-trace/web-transport-quinn-v0.11.11` |
 
@@ -36,9 +37,11 @@ A patch rewrites the consumer's `Cargo.lock`, so the recipes restore the
 committed lockfile when cargo exits. A plain `cargo build` in a submodule ignores
 the workspace and builds that fork exactly as it builds standalone.
 
-QUICHE reads the toolkit's C++ install from `MOQ_TRACE_PREFIX`, which
-`just build-google-quiche` points at `moq-trace/target/install` after installing
-the pinned toolkit there.
+QUICHE and moxygen read the toolkit's C++ install from `MOQ_TRACE_PREFIX`, which
+`just build-google-quiche` and `just build-facebook-moxygen` point at
+`moq-trace/target/install` after installing the pinned toolkit there. moxygen's
+first build also fetches folly, fizz, wangle, mvfst, and proxygen at the
+revisions its checkout pins, and needs well over 4 GB of memory.
 
 ## Changing the event contract
 

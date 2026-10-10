@@ -46,12 +46,16 @@ build-cloudflare-moq-rs:
 build-google-quiche: install-trace
     cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- moq_trace/build.sh
 
+# Build the traced moxygen relay against the toolkit installed from the pin.
+build-facebook-moxygen: install-trace
+    cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} nix develop --command moq_trace/build.sh
+
 # Build the bench peers against the pinned moq-dev-moq, toolkit, and forks.
 build-moq-bench:
     just _cargo moq-trace/moq-bench build --release --features lttng
 
 # Every check and traced build that a pin bump must pass.
-check-all: check-trace build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-moq-bench
+check-all: check-trace build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
 
 # Run cargo in a component's development shell with the workspace patches. The
 # patches rewrite Cargo.lock to path sources, so the committed lockfile is put
