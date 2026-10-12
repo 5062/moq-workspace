@@ -12,12 +12,13 @@
 # [patch.crates-io] for the same crate, which is how these replace the forks'
 # git branch and rev pins.
 
-# Quinn and web-transport require moq-trace from crates.io. The toolkit and
-# moq-dev-moq name its git repository directly. Both must resolve to the one
-# checkout, or the MoQ and transport hooks link two facades with unrelated
-# identifier spaces.
+# Quinn requires quic-trace from crates.io, and the relays require moq-trace,
+# which the toolkit and moq-dev-moq name by its git repository. Every one must
+# resolve to the one checkout, or the MoQ and transport hooks link two facades
+# with unrelated identifier spaces.
 [patch.crates-io]
 moq-trace = { path = "moq-trace/crates/moq-trace" }
+quic-trace = { path = "moq-trace/crates/quic-trace" }
 # Quinn takes quinn-udp by path, so the fork's copy comes with it.
 quinn = { path = "deps/quinn/quinn" }
 quinn-proto = { path = "deps/quinn/quinn-proto" }
@@ -27,6 +28,7 @@ web-transport-trait = { path = "deps/web-transport/rs/web-transport-trait" }
 
 [patch."https://github.com/5062/moq-trace"]
 moq-trace = { path = "moq-trace/crates/moq-trace" }
+quic-trace = { path = "moq-trace/crates/quic-trace" }
 
 # The bench peers in moq-trace/moq-bench build against the moq implementation
 # under test, which is the pinned moq-dev-moq relay.
