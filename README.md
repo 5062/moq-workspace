@@ -13,6 +13,7 @@ were checked together.
 | `relays/facebook-moxygen/` | [5062/moxygen](https://github.com/5062/moxygen) | `moq-trace` |
 | `deps/quinn/` | [5062/quinn](https://github.com/5062/quinn) | `moq-trace/quinn-0.11` |
 | `deps/web-transport/` | [5062/web-transport](https://github.com/5062/web-transport) | `moq-trace/web-transport-quinn-v0.11.11` |
+| `deps/mvfst/` | [5062/mvfst](https://github.com/5062/mvfst) | `moq-trace` |
 
 ## Setup
 
@@ -40,8 +41,13 @@ the workspace and builds that fork exactly as it builds standalone.
 QUICHE and moxygen read the toolkit's C++ install from `MOQ_TRACE_PREFIX`, which
 `just build-google-quiche` and `just build-facebook-moxygen` point at
 `moq-trace/target/install` after installing the pinned toolkit there. moxygen's
-first build also fetches folly, fizz, wangle, mvfst, and proxygen at the
-revisions its checkout pins, and needs well over 4 GB of memory.
+first build also fetches folly, fizz, wangle, and proxygen at the revisions its
+checkout pins, and needs well over 4 GB of memory. Its transport, mvfst, comes
+from `deps/mvfst`, which `just build-facebook-moxygen` passes as
+`MVFST_SOURCE_DIR`, the way the cargo patches replace the Rust forks' sources. A
+standalone traced moxygen build fetches the same fork at the revision in its
+`moq_trace/mvfst-rev.txt`, so commit that file whenever the `deps/mvfst` pin
+moves.
 
 ## Changing the event contract
 

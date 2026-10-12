@@ -27,3 +27,7 @@
 	path = relays/facebook-moxygen
 	url = https://github.com/5062/moxygen.git
 	branch = moq-trace
+[submodule "deps/mvfst"]
+	path = deps/mvfst
+	url = https://github.com/5062/mvfst.git
+	branch = moq-trace

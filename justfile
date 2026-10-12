@@ -46,9 +46,10 @@ build-cloudflare-moq-rs:
 build-google-quiche: install-trace
     cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- moq_trace/build.sh
 
-# Build the traced moxygen relay against the toolkit installed from the pin.
+# Build the traced moxygen relay against the toolkit installed from the pin and
+# the pinned mvfst fork.
 build-facebook-moxygen: install-trace
-    cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} nix develop --command moq_trace/build.sh
+    cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/build.sh
 
 # Build the bench peers against the pinned moq-dev-moq, toolkit, and forks.
 build-moq-bench:
