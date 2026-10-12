@@ -56,8 +56,9 @@ A contract change spans the toolkit and every relay:
 1. Commit the change in `moq-trace/` and in each affected fork, on the branch
    listed above. Submodules check out a detached commit, so switch to the branch
    first, for example `git -C relays/moq-dev-moq switch moq-trace`.
-2. Run `nix develop --command just check-all`, which runs the toolkit checks and
-   builds every traced relay and the bench peers against the working trees.
+2. Run `nix develop --command just check-all`, which runs the toolkit checks,
+   lints the traced Rust relays, and builds every traced relay and the bench
+   peers against the working trees.
 3. Push each submodule's branch, then commit the new pins here and push. Pushing
    the pins first would record commits that nobody else can fetch.
 

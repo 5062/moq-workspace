@@ -55,14 +55,22 @@ build-facebook-moxygen: install-trace
 build-moq-bench:
     just _cargo moq-trace/moq-bench build --release --features lttng
 
+# Lint the traced Rust relays against the pinned toolkit and forks.
+clippy-relays:
+    just _cargo relays/moq-dev-moq clippy -p moq-net -p moq-relay --features moq-relay/trace --all-targets -- -D warnings
+    just _cargo relays/cloudflare-moq-rs clippy -p moq-relay-ietf --features trace --all-targets -- -D warnings
+
 # Every check and traced build that a pin bump must pass.
-check-all: check-trace build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
+check-all: check-trace clippy-relays build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
 
 # Run cargo in a component's development shell with the workspace patches. The
 # patches rewrite Cargo.lock to path sources, so the committed lockfile is put
-# back afterwards and a submodule never shows the rewrite as a change.
+# back afterwards and a submodule never shows the rewrite as a change. The
+# config follows the subcommand: cargo does not forward a --config given before
+# it to an external subcommand such as clippy, which would then build the
+# upstream crates.
 [private]
-_cargo dir *args:
+_cargo dir command *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd {{ dir }}
@@ -70,4 +78,4 @@ _cargo dir *args:
     cp Cargo.lock "$lock"
     trap 'mv "$lock" Cargo.lock' EXIT
     shell=$(git rev-parse --show-toplevel)
-    nix develop "$shell" --command cargo --config {{ patches }} {{ args }}
+    nix develop "$shell" --command cargo {{ command }} --config {{ patches }} {{ args }}
