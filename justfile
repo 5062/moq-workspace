@@ -60,8 +60,21 @@ clippy-relays:
     just _cargo relays/moq-dev-moq clippy -p moq-net -p moq-relay --features moq-relay/trace --all-targets -- -D warnings
     just _cargo relays/cloudflare-moq-rs clippy -p moq-relay-ietf --features trace --all-targets -- -D warnings
 
-# Every check and traced build that a pin bump must pass.
-check-all: check-trace clippy-relays build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
+# Check that the forks' standalone pins build the code the workspace pins.
+check-pins:
+    scripts/check-pins.sh
+
+# Run every relay's tests with tracing compiled in, including the
+# instrumentation's own tests. QUICHE's test_trace.sh captures its transport
+# fixtures with LTTng and checks the events.
+test-relays: install-trace
+    just _cargo relays/moq-dev-moq test -p moq-net --features moq-net/trace
+    just _cargo relays/cloudflare-moq-rs test --workspace --features moq-relay-ietf/trace
+    cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- bash -c 'moq_trace/test.sh && moq_trace/test.sh //quiche:quic_connection_test //quiche:quic_framer_test //quiche:quic_udp_socket_test //quiche:quiche_linux_tests && moq_trace/test_trace.sh'
+    cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/test.sh
+
+# Every check, test, and traced build that a pin bump must pass.
+check-all: check-trace check-pins clippy-relays test-relays build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
 
 # Run cargo in a component's development shell with the workspace patches. The
 # patches rewrite Cargo.lock to path sources, so the committed lockfile is put

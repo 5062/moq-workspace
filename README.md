@@ -49,6 +49,15 @@ standalone traced moxygen build fetches the same fork at the revision in its
 `moq_trace/mvfst-rev.txt`, so commit that file whenever the `deps/mvfst` pin
 moves.
 
+A relay host builds each fork on its own, from the revisions the fork names:
+its `Cargo.lock`, git revs in its Cargo manifests and configs, and moxygen's
+`mvfst-rev.txt`. `just check-pins` fails when one of those is not in the history
+of the matching submodule's pin or builds different code from it. Fix it in the
+fork, for example with `cargo update -p moq-trace` after the toolkit pin moves,
+then commit. A pin may trail by commits that change nothing it builds, which
+breaks the cycle of moq-bench, inside moq-trace, locking moq-dev-moq, which locks
+moq-trace.
+
 ## Changing the event contract
 
 A contract change spans the toolkit and every relay:
@@ -57,8 +66,9 @@ A contract change spans the toolkit and every relay:
    listed above. Submodules check out a detached commit, so switch to the branch
    first, for example `git -C relays/moq-dev-moq switch moq-trace`.
 2. Run `nix develop --command just check-all`, which runs the toolkit checks,
-   lints the traced Rust relays, and builds every traced relay and the bench
-   peers against the working trees.
+   checks the forks' standalone pins, lints the traced Rust relays, runs every
+   relay's tests with tracing compiled in, and builds every traced relay and the
+   bench peers against the working trees.
 3. Push each submodule's branch, then commit the new pins here and push. Pushing
    the pins first would record commits that nobody else can fetch.
 
