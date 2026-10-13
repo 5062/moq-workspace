@@ -2,6 +2,9 @@
 # Build: `just build-moq-dev-moq` in the workspace.
 #
 # The relay generates its own certificate, and anyone may publish or subscribe.
+# Like upstream, it installs no SIGINT handler, so a graceful stop would read as
+# a crash. A killed relay can leave its qlog's last record half written, which
+# the analysis ignores.
 checkout = "relays/moq-dev-moq"
 relay_bin = "target/release/moq-relay"
 relay_args = [
@@ -15,4 +18,5 @@ relay_args = [
 # through the workspace recipe, against the pinned toolkit and forks, and sets
 # NIX_CONFIG so a host whose Nix leaves flakes off still builds.
 relay_build = "cd \"$(git rev-parse --show-superproject-working-tree)\" && NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-moq-dev-moq"
+relay_graceful_stop = false
 transport_profile = "quinn"

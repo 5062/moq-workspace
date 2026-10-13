@@ -1215,7 +1215,7 @@ dependencies = [
 [[package]]
 name = "kio"
 version = "0.4.4"
-source = "git+https://github.com/5062/moq?branch=moq-trace#b319cadcaffb71550e947abe1c06d96094b52d11"
+source = "git+https://github.com/5062/moq?branch=moq-trace#406fb04738a2b116dcdf4308bd67416aab9607ef"
 dependencies = [
  "moq-trace",
  "smallvec",
@@ -1356,7 +1356,7 @@ dependencies = [
 [[package]]
 name = "moq-native"
 version = "0.18.3"
-source = "git+https://github.com/5062/moq?branch=moq-trace#b319cadcaffb71550e947abe1c06d96094b52d11"
+source = "git+https://github.com/5062/moq?branch=moq-trace#406fb04738a2b116dcdf4308bd67416aab9607ef"
 dependencies = [
  "clap",
  "futures",
@@ -1393,7 +1393,7 @@ dependencies = [
 [[package]]
 name = "moq-net"
 version = "0.1.18"
-source = "git+https://github.com/5062/moq?branch=moq-trace#b319cadcaffb71550e947abe1c06d96094b52d11"
+source = "git+https://github.com/5062/moq?branch=moq-trace#406fb04738a2b116dcdf4308bd67416aab9607ef"
 dependencies = [
  "bytes",
  "futures",
@@ -1411,6 +1411,7 @@ dependencies = [
 [[package]]
 name = "moq-trace"
 version = "0.1.0"
+source = "git+https://github.com/5062/moq-trace?branch=main#48af184aa316d4fa7f4f1d34a79b7609b98c585c"
 dependencies = [
  "moq-trace-lttng-sys",
  "quic-trace",
@@ -1420,6 +1421,7 @@ dependencies = [
 [[package]]
 name = "moq-trace-lttng-sys"
 version = "0.1.0"
+source = "git+https://github.com/5062/moq-trace?branch=main#48af184aa316d4fa7f4f1d34a79b7609b98c585c"
 dependencies = [
  "trace-provider-build",
 ]
@@ -1745,6 +1747,7 @@ dependencies = [
 [[package]]
 name = "quic-trace"
 version = "0.1.0"
+source = "git+https://github.com/5062/moq-trace?branch=main#48af184aa316d4fa7f4f1d34a79b7609b98c585c"
 dependencies = [
  "quic-trace-lttng-sys",
  "trace-core",
@@ -1753,19 +1756,20 @@ dependencies = [
 [[package]]
 name = "quic-trace-lttng-sys"
 version = "0.1.0"
+source = "git+https://github.com/5062/moq-trace?branch=main#48af184aa316d4fa7f4f1d34a79b7609b98c585c"
 dependencies = [
  "trace-provider-build",
 ]
 
 [[package]]
 name = "quinn"
-version = "0.11.11"
-source = "git+https://github.com/5062/quinn?rev=04bdddabd8fe91e049d5334fdb7597604255d9d9#04bdddabd8fe91e049d5334fdb7597604255d9d9"
+version = "0.11.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4051e23e9185c255a7e33ef59cdbca87a22d359052eecd22fc6b901fb37d9d11"
 dependencies = [
  "bytes",
  "cfg_aliases",
  "pin-project-lite",
- "quic-trace",
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
@@ -1779,15 +1783,15 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.16"
-source = "git+https://github.com/5062/quinn?rev=04bdddabd8fe91e049d5334fdb7597604255d9d9#04bdddabd8fe91e049d5334fdb7597604255d9d9"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e750cca55fe4f0439a15d0bb529da9651e79993e8e72c61a899a36d462befbe"
 dependencies = [
  "aws-lc-rs",
  "bytes",
  "fastbloom",
  "getrandom 0.4.3",
  "lru-slab",
- "quic-trace",
  "rand",
  "rand_pcg",
  "ring",
@@ -1804,13 +1808,13 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.15"
-source = "git+https://github.com/5062/quinn?rev=04bdddabd8fe91e049d5334fdb7597604255d9d9#04bdddabd8fe91e049d5334fdb7597604255d9d9"
+version = "0.5.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af66907df18639dcf4db56ca65490cabc4b27a97dbadd96f2926cca73298f016"
 dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "quic-trace",
  "socket2",
  "tracing",
  "windows-sys 0.61.2",
@@ -2587,6 +2591,7 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 [[package]]
 name = "trace-core"
 version = "0.1.0"
+source = "git+https://github.com/5062/moq-trace?branch=main#48af184aa316d4fa7f4f1d34a79b7609b98c585c"
 dependencies = [
  "quic-trace-lttng-sys",
 ]
@@ -2594,6 +2599,7 @@ dependencies = [
 [[package]]
 name = "trace-provider-build"
 version = "0.1.0"
+source = "git+https://github.com/5062/moq-trace?branch=main#48af184aa316d4fa7f4f1d34a79b7609b98c585c"
 dependencies = [
  "bindgen",
  "cc",
@@ -2892,21 +2898,8 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "web-transport-proto 0.6.2",
+ "web-transport-proto",
  "web-transport-trait",
-]
-
-[[package]]
-name = "web-transport-proto"
-version = "0.6.1"
-source = "git+https://github.com/5062/web-transport?rev=eea76bc39afacc65364dc3cd258d0b7bd98836f7#eea76bc39afacc65364dc3cd258d0b7bd98836f7"
-dependencies = [
- "bytes",
- "http",
- "sfv",
- "thiserror",
- "tokio",
- "url",
 ]
 
 [[package]]
@@ -2925,8 +2918,9 @@ dependencies = [
 
 [[package]]
 name = "web-transport-quinn"
-version = "0.11.11"
-source = "git+https://github.com/5062/web-transport?rev=eea76bc39afacc65364dc3cd258d0b7bd98836f7#eea76bc39afacc65364dc3cd258d0b7bd98836f7"
+version = "0.11.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48ada8c56f3dc126fa3c9e6b8f31f3bff5dfd24458f6664743d936ecad741d15"
 dependencies = [
  "bytes",
  "futures",
@@ -2938,14 +2932,15 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "web-transport-proto 0.6.1",
+ "web-transport-proto",
  "web-transport-trait",
 ]
 
 [[package]]
 name = "web-transport-trait"
 version = "0.3.7"
-source = "git+https://github.com/5062/web-transport?rev=eea76bc39afacc65364dc3cd258d0b7bd98836f7#eea76bc39afacc65364dc3cd258d0b7bd98836f7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6394e09415ddc1e7c88d605443a3d2f333bf278f74c17020a2b6c44e97507883"
 dependencies = [
  "bytes",
 ]
