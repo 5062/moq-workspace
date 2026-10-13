@@ -8,6 +8,8 @@
 # handler, so a graceful stop would read as a crash. QUICHE emits no Quinn
 # routing or scheduling phases.
 checkout = "relays/google-quiche"
+# The relay host initializes these besides the suite's submodules.
+submodules = ["relays/google-quiche"]
 relay_bin = "bazel-bin/quiche/moqt_relay"
 relay_args = [
   "--bind_address", "0.0.0.0",

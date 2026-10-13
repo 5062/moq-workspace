@@ -5,6 +5,8 @@
 # The relay logs "listening on <addr>", which the default ready marker matches.
 # It installs no SIGINT handler, so a graceful stop would read as a crash.
 checkout = "relays/cloudflare-moq-rs"
+# The relay host initializes these besides the suite's submodules.
+submodules = ["relays/cloudflare-moq-rs"]
 relay_bin = "target/release/moq-relay-ietf"
 # Run in the relay's checkout on a remote relay host before each run. It builds
 # through the workspace recipe, against the pinned toolkit and forks, and sets

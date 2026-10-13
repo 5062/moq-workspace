@@ -12,6 +12,8 @@
 # recvmmsg call, the read path whose system call mvfst's trace hooks bracket;
 # folly's read callback hides the call, so its packets get no RX trace.
 checkout = "relays/facebook-moxygen"
+# The relay host initializes these besides the suite's submodules.
+submodules = ["relays/facebook-moxygen", "deps/mvfst"]
 relay_bin = "_build/moxygen/relay/moqrelayserver"
 relay_args = [
   "-port", "{port}",

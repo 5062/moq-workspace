@@ -86,17 +86,17 @@ from the workspace root does the same. Build each relay you bench first, and see
 the toolkit's README for the workload flags.
 
 For a distributed run, `--hosts experiments/hosts.toml` places the roles on other
-hosts, each with a workspace checkout at its `checkout`. Before each run, a relay
-host builds its relay with the profile's `relay_build`, which runs the relay's
-`just build-*` recipe here, and a peer host builds the peers with
-`just build-moq-bench`. A peer host needs only the submodules the peers build
-from:
+hosts, each with a workspace checkout at its `checkout`. The hosts need only ssh,
+git, and Nix, and QUICHE's relay host devenv too: before each run, the bench
+clones the workspace there if it is missing and checks out this checkout's
+commit, with only the submodules each host's roles need, `submodules` in
+`moq-trace.toml` and a relay profile's own. It then builds the relay with the
+profile's `relay_build`, which runs the relay's `just build-*` recipe, and the
+peers with `just build-moq-bench`.
 
-```sh
-git submodule update --init moq-trace relays/moq-dev-moq deps/quinn deps/web-transport
-```
-
-A relay host needs those, its relay's submodule, and `deps/mvfst` for moxygen.
+The hosts fetch the commit and its submodules' commits from GitHub, so push
+before a distributed run. A bench refuses to start while tracked files here have
+uncommitted changes, which the hosts would not see.
 
 ## Changing the event contract
 

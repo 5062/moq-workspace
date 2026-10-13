@@ -11,3 +11,10 @@ bench_bin = "moq-bench/target/release/moq-bench"
 # Builds the peers in a remote peer host's workspace checkout, setting NIX_CONFIG
 # so a host whose Nix leaves flakes off still builds.
 bench_build = "NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-moq-bench"
+
+# Remote hosts clone this repository into their `checkout` and are brought to
+# the controller's commit before each run, so commit and push first.
+repository = "https://github.com/5062/moq-workspace.git"
+# Every remote checkout needs these: the toolkit, and every path the Cargo
+# patches name, which Cargo loads for any build here. A profile adds its relay's.
+submodules = ["moq-trace", "deps/quinn", "deps/web-transport", "relays/moq-dev-moq"]
