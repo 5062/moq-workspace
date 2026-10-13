@@ -90,16 +90,30 @@ check-pins:
     scripts/check-pins.sh
 
 # Run every relay's tests with tracing compiled in, including the
-# instrumentation's own tests. QUICHE's test_trace.sh captures its transport
-# fixtures with LTTng and checks the events.
+# instrumentation's own tests.
 test-relays: install-trace
     just _cargo relays/moq-dev-moq test -p moq-net --features moq-net/trace
     just _cargo relays/cloudflare-moq-rs test --workspace --features moq-relay-ietf/trace
-    cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- bash -c 'moq_trace/test.sh && moq_trace/test.sh //quiche:quic_connection_test //quiche:quic_framer_test //quiche:quic_udp_socket_test //quiche:quiche_linux_tests && moq_trace/test_trace.sh'
+    cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- bash -c 'moq_trace/test.sh && moq_trace/test.sh //quiche:quic_connection_test //quiche:quic_framer_test //quiche:quic_udp_socket_test //quiche:quiche_linux_tests'
     cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/test.sh
 
+# Capture each QUIC stack's own fixtures under LTTng and check the events with
+# the toolkit's `moq-trace verify`: Quinn's blocked transfers, QUICHE's packet,
+# batch, and stream fixtures, and moxygen's relay session for mvfst. Each script
+# runs in its stack's shell, entered from the toolkit's, which puts moq-trace on
+# PATH. Quinn builds against the pinned toolkit, so its lockfile is put back.
+test-trace: install-trace
+    #!/usr/bin/env bash
+    set -euo pipefail
+    lock=$(mktemp)
+    cp deps/quinn/Cargo.lock "$lock"
+    trap 'mv "$lock" deps/quinn/Cargo.lock' EXIT
+    nix develop {{ trace_shell }} --command deps/quinn/moq_trace/test_trace.sh --config {{ patches }}
+    nix develop {{ trace_shell }} --command bash -c 'cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- moq_trace/test_trace.sh'
+    nix develop {{ trace_shell }} --command bash -c 'cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/test_trace.sh'
+
 # Every check, test, and traced build that a pin bump must pass.
-check-all: check-trace check-pins check-bench clippy-relays test-relays build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
+check-all: check-trace check-pins check-bench clippy-relays test-relays test-trace build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
 
 # Run cargo in a component's development shell with the workspace patches. A
 # submodule builds in its own shell, and the workspace's own code in the
