@@ -40,6 +40,17 @@ nix develop --command just init
 submodules to the pins they record. Without it, a pull updates only the pins and
 leaves the old code checked out.
 
+Optionally, install direnv with nix-direnv and enable direnv's hook in your
+shell, then run `direnv allow` from the workspace root. The `.envrc` loads the
+workspace's Nix shell, so you can run `just` directly:
+
+```sh
+just build-moq-dev-moq build-moq-bench
+just bench --relay moq-dev-moq --subscribers 4
+```
+
+Each recipe still enters the component's own development shell when needed.
+
 ## How builds use the pins
 
 Every fork names its dependencies by git branch or rev so that it builds on its
