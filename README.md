@@ -2,7 +2,20 @@
 
 Pins the MoQ trace toolkit, the instrumented relays, and the transport forks they
 build on, so that one commit of this repository names a set of revisions that
-were checked together.
+were checked together. It also holds what a cross-implementation bench needs
+beyond those: the reference peers, a launch profile per relay, and the hosts the
+experiments run on.
+
+| Path | Contents |
+|---|---|
+| `moq-bench/` | The implementation-independent reference peers; see `moq-bench/README.md` |
+| `profiles/` | One `moq-trace bench` launch profile per relay |
+| `moq-trace.toml` | The bench suite: the profiles, the peers, and the protocol every relay negotiates |
+| `experiments/` | Host configurations for distributed runs |
+| `docs/` | The relay processing taxonomy and cross-implementation plans |
+| `draft/` | Notes outside the toolkit's scope |
+
+The submodules:
 
 | Path | Repository | Branch |
 |---|---|---|
@@ -49,14 +62,41 @@ standalone traced moxygen build fetches the same fork at the revision in its
 `moq_trace/mvfst-rev.txt`, so commit that file whenever the `deps/mvfst` pin
 moves.
 
-A relay host builds each fork on its own, from the revisions the fork names:
-its `Cargo.lock`, git revs in its Cargo manifests and configs, and moxygen's
+A fork built outside the workspace builds from the revisions it names: its
+`Cargo.lock`, git revs in its Cargo manifests and configs, and moxygen's
 `mvfst-rev.txt`. `just check-pins` fails when one of those is not in the history
 of the matching submodule's pin or builds different code from it. Fix it in the
 fork, for example with `cargo update -p moq-trace` after the toolkit pin moves,
-then commit. A pin may trail by commits that change nothing it builds, which
-breaks the cycle of moq-bench, inside moq-trace, locking moq-dev-moq, which locks
-moq-trace.
+then commit. A pin may trail by commits that change nothing it builds. moq-bench
+lives here and always builds through the patches, so it has no standalone pins.
+
+## Running benches
+
+`just bench` runs `moq-trace bench` from the workspace root with the suite in
+`moq-trace.toml`, so each profile's relay is the pinned submodule under
+`relays/`:
+
+```sh
+nix develop --command just build-moq-dev-moq build-moq-bench
+nix develop --command just bench --relay moq-dev-moq --subscribers 4
+```
+
+Inside the toolkit's shell, `nix develop ./moq-trace`, plain `moq-trace bench`
+from the workspace root does the same. Build each relay you bench first, and see
+the toolkit's README for the workload flags.
+
+For a distributed run, `--hosts experiments/hosts.toml` places the roles on other
+hosts, each with a workspace checkout at its `checkout`. Before each run, a relay
+host builds its relay with the profile's `relay_build`, which runs the relay's
+`just build-*` recipe here, and a peer host builds the peers with
+`just build-moq-bench`. A peer host needs only the submodules the peers build
+from:
+
+```sh
+git submodule update --init moq-trace relays/moq-dev-moq deps/quinn deps/web-transport
+```
+
+A relay host needs those, its relay's submodule, and `deps/mvfst` for moxygen.
 
 ## Changing the event contract
 
@@ -66,9 +106,10 @@ A contract change spans the toolkit and every relay:
    listed above. Submodules check out a detached commit, so switch to the branch
    first, for example `git -C relays/moq-dev-moq switch moq-trace`.
 2. Run `nix develop --command just check-all`, which runs the toolkit checks,
-   checks the forks' standalone pins, lints the traced Rust relays, runs every
-   relay's tests with tracing compiled in, and builds every traced relay and the
-   bench peers against the working trees.
+   checks the forks' standalone pins, tests the bench peers and checks the bench
+   suite, lints the traced Rust relays, runs every relay's tests with tracing
+   compiled in, and builds every traced relay and the bench peers against the
+   working trees.
 3. Push each submodule's branch, then commit the new pins here and push. Pushing
    the pins first would record commits that nobody else can fetch.
 

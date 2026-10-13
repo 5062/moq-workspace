@@ -9,9 +9,10 @@
 #
 # Every standalone pin must be in its submodule's checked-out history, so it is
 # on a branch and not ahead of the pin, and must leave the files a dependent
-# builds unchanged from the pin. Exact equality cannot hold: moq-bench lives in
-# moq-trace and locks moq-dev-moq, whose lock names moq-trace, so updating one
-# lock always outdates the other by a lockfile-only commit.
+# builds unchanged from the pin. Exact equality is not required, so a fork's
+# lock may trail the toolkit pin by commits that change nothing it builds.
+# moq-bench is workspace code that always builds through the patches, so it
+# has no standalone pins to check.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -21,11 +22,9 @@ cd "$root"
 lockfiles=(
   relays/moq-dev-moq/Cargo.lock
   relays/cloudflare-moq-rs/Cargo.lock
-  moq-trace/moq-bench/Cargo.lock
 )
 manifests=(
   relays/moq-dev-moq/rs/trace.toml
-  moq-trace/moq-bench/Cargo.toml
 )
 
 # The submodule each fork repository is pinned at, and the paths a dependent

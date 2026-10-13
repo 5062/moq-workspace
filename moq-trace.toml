@@ -1,0 +1,13 @@
+# What `moq-trace bench` runs from this workspace. Relative paths resolve against
+# this file's directory, and so do the profiles' relative checkouts.
+
+# One launch profile per relay implementation.
+profiles = "profiles"
+# The version every implementation negotiates. `just check-bench` checks it
+# against the peers' own pin in `moq-bench/src/lib.rs`.
+protocol = "moq-transport-16"
+# The reference peers, which `just build-moq-bench` writes.
+bench_bin = "moq-bench/target/release/moq-bench"
+# Builds the peers in a remote peer host's workspace checkout, setting NIX_CONFIG
+# so a host whose Nix leaves flakes off still builds.
+bench_build = "NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-moq-bench"

@@ -1,5 +1,5 @@
 # https://github.com/5062/moxygen/tree/moq-trace
-# Build: `nix develop --command moq_trace/build.sh` with MOQ_TRACE_PREFIX set.
+# Build: `just build-facebook-moxygen` in the workspace.
 #
 # The relay logs no readiness marker at its default verbosity, so the runner
 # waits a fixed startup delay. It binds IPv4 and IPv6 and stops cleanly on
@@ -11,7 +11,7 @@
 # broadcast receives nothing. `-recvmmsg` reads datagrams with mvfst's own
 # recvmmsg call, the read path whose system call mvfst's trace hooks bracket;
 # folly's read callback hides the call, so its packets get no RX trace.
-checkout = "~/facebook-moxygen"
+checkout = "relays/facebook-moxygen"
 relay_bin = "_build/moxygen/relay/moqrelayserver"
 relay_args = [
   "-port", "{port}",
@@ -24,8 +24,10 @@ relay_args = [
 ]
 relay_ready_log = ""
 relay_startup_seconds = 1.0
-# Run in the checkout on a remote relay host before each run. The toolkit is
-# installed from its checkout first, so the relay never compiles against an
-# install older than the event contract the analysis reads.
-relay_build = "(cd ../moq-trace && nix --extra-experimental-features 'nix-command flakes' develop --command just install) && MOQ_TRACE_PREFIX=$(cd ../moq-trace && pwd)/target/install nix --extra-experimental-features 'nix-command flakes' develop --command moq_trace/build.sh"
+# Run in the relay's checkout on a remote relay host before each run. It builds
+# through the workspace recipe, against the pinned toolkit and forks, and sets
+# NIX_CONFIG so a host whose Nix leaves flakes off still builds.
+relay_build = "cd \"$(git rev-parse --show-superproject-working-tree)\" && NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-facebook-moxygen"
+# The recipe installs the pinned toolkit first, so the relay never compiles
+# against an install older than the event contract the analysis reads.
 transport_profile = "generic"

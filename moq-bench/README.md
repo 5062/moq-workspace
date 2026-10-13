@@ -46,8 +46,8 @@ backend, and the patched Quinn always carries its packet and socket hooks, so bo
 peers register all nine events the Python capture looks for.
 
 ```sh
-just moq-bench-build            # cargo build --release --features lttng
-lttng list --userspace   # moq_trace:* and quic_trace:* for the peer's PID
+nix develop --command just build-moq-bench   # cargo build --release --features lttng
+lttng list --userspace                       # moq_trace:* and quic_trace:* for the peer's PID
 ```
 
 ## Usage
@@ -130,15 +130,15 @@ comparison.
 
 ## Boundary
 
-This directory sits outside the toolkit's workspace, which `Cargo.toml` enforces
-with `exclude`, because it depends on the MoQ implementation under test. It pulls
-`moq-net` and `moq-native` from the `moq-trace` branch of
-[5062/moq](https://github.com/5062/moq), pinned by `moq-bench/Cargo.lock`, so
-`just check` never builds MoQ and only the `just moq-bench-*` recipes fetch it.
-Run `cargo update --manifest-path moq-bench/Cargo.toml -p moq-net -p moq-native`
-to pick up newer commits on that branch. The transport fork revisions in
-`Cargo.toml` must match `rs/trace.toml` on that branch, and `moq-trace` is patched
-for both its crates.io and git sources so every hook shares this checkout.
+The peers live in the workspace rather than in moq-trace, because they depend on
+the MoQ implementation under test, and the toolkit names no implementation. They
+name `moq-net` and `moq-native` from the `moq-trace` branch of
+[5062/moq](https://github.com/5062/moq), and build only through the workspace
+recipes (`just build-moq-bench`, `just check-bench`), whose `.cargo/patches.toml`
+replaces moq with the pinned `relays/moq-dev-moq` and moq-trace, Quinn, and
+web-transport with their pinned submodules. Every hook then shares one toolkit
+checkout and the transport the relays build on, and a pin bump moves the peers
+with the relays.
 
 The dependency direction is deliberate:
 

@@ -1,13 +1,15 @@
 # https://github.com/5062/moq-rs
-# Build: `cargo build --release -p moq-relay-ietf --features trace` in 5062/moq-rs.
+# Build: `just build-cloudflare-moq-rs` in the workspace.
 #
 # The certificate placeholders make the runner generate a throwaway TLS pair.
 # The relay logs "listening on <addr>", which the default ready marker matches.
 # It installs no SIGINT handler, so a graceful stop would read as a crash.
-checkout = "~/cloudflare-moq-rs"
+checkout = "relays/cloudflare-moq-rs"
 relay_bin = "target/release/moq-relay-ietf"
-# Run in the checkout on a remote relay host before each run.
-relay_build = "nix --extra-experimental-features 'nix-command flakes' develop --command cargo build --release -p moq-relay-ietf --features trace"
+# Run in the relay's checkout on a remote relay host before each run. It builds
+# through the workspace recipe, against the pinned toolkit and forks, and sets
+# NIX_CONFIG so a host whose Nix leaves flakes off still builds.
+relay_build = "cd \"$(git rev-parse --show-superproject-working-tree)\" && NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-cloudflare-moq-rs"
 relay_args = [
   "--bind", "[::]:{port}",
   "--tls-cert", "{certificate}",

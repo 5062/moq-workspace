@@ -30,7 +30,7 @@ web-transport-trait = { path = "deps/web-transport/rs/web-transport-trait" }
 moq-trace = { path = "moq-trace/crates/moq-trace" }
 quic-trace = { path = "moq-trace/crates/quic-trace" }
 
-# The bench peers in moq-trace/moq-bench build against the moq implementation
+# The bench peers in moq-bench build against the moq implementation
 # under test, which is the pinned moq-dev-moq relay.
 [patch."https://github.com/5062/moq"]
 moq-native = { path = "relays/moq-dev-moq/rs/moq-native" }

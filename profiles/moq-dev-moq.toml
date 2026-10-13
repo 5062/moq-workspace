@@ -1,8 +1,8 @@
 # https://github.com/5062/moq/tree/moq-trace
-# Build: `just trace-build`
+# Build: `just build-moq-dev-moq` in the workspace.
 #
 # The relay generates its own certificate, and anyone may publish or subscribe.
-checkout = "~/moq-dev-moq"
+checkout = "relays/moq-dev-moq"
 relay_bin = "target/release/moq-relay"
 relay_args = [
   "--server-bind", "[::]:{port}",
@@ -11,6 +11,8 @@ relay_args = [
   "--tls-generate", "localhost",
   "--auth-public", "",
 ]
-# Run in the checkout on a remote relay host before each run.
-relay_build = "nix --extra-experimental-features 'nix-command flakes' develop --command just trace-build"
+# Run in the relay's checkout on a remote relay host before each run. It builds
+# through the workspace recipe, against the pinned toolkit and forks, and sets
+# NIX_CONFIG so a host whose Nix leaves flakes off still builds.
+relay_build = "cd \"$(git rev-parse --show-superproject-working-tree)\" && NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-moq-dev-moq"
 transport_profile = "quinn"
