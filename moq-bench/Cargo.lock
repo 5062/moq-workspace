@@ -1215,7 +1215,7 @@ dependencies = [
 [[package]]
 name = "kio"
 version = "0.4.4"
-source = "git+https://github.com/5062/moq?branch=moq-trace#140a0f988d2aa588579c79149b02ee9ac726f030"
+source = "git+https://github.com/5062/moq?branch=moq-trace#fde029d8fd669991b3e2baeb77ae9ec15f8caa7e"
 dependencies = [
  "moq-trace",
  "smallvec",
@@ -1356,7 +1356,7 @@ dependencies = [
 [[package]]
 name = "moq-native"
 version = "0.18.3"
-source = "git+https://github.com/5062/moq?branch=moq-trace#140a0f988d2aa588579c79149b02ee9ac726f030"
+source = "git+https://github.com/5062/moq?branch=moq-trace#fde029d8fd669991b3e2baeb77ae9ec15f8caa7e"
 dependencies = [
  "clap",
  "futures",
@@ -1393,7 +1393,7 @@ dependencies = [
 [[package]]
 name = "moq-net"
 version = "0.1.18"
-source = "git+https://github.com/5062/moq?branch=moq-trace#140a0f988d2aa588579c79149b02ee9ac726f030"
+source = "git+https://github.com/5062/moq?branch=moq-trace#fde029d8fd669991b3e2baeb77ae9ec15f8caa7e"
 dependencies = [
  "bytes",
  "futures",
