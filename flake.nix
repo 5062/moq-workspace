@@ -13,7 +13,8 @@
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      # The runner executes here. Rust and C++ builds use their own shells.
+      # Python tooling and its native decoder run here. Instrumented components
+      # retain their own development shells.
       devShells = forAll (
         pkgs:
         let
@@ -30,6 +31,7 @@
               pydantic
               build
               setuptools
+              setuptools-rust
             ]
           );
         in
@@ -39,8 +41,17 @@
               pkgs.git
               pkgs.just
               pkgs.lttng-tools
+              pkgs.lttng-ust
               pkgs.util-linux
               pkgs.ruff
+              pkgs.rustc
+              pkgs.cargo
+              pkgs.rustfmt
+              pkgs.clippy
+              pkgs.babeltrace2
+              pkgs.clang
+              pkgs.pkg-config
+              pkgs.rustPlatform.bindgenHook
               python
               (pkgs.writeShellScriptBin "moq-workspace-bench" ''
                 exec ${python}/bin/python -P -m moq_workspace_bench.cli "$@"
@@ -49,12 +60,13 @@
                 exec ${python}/bin/python -P -m moq_trace.run.cli "$@"
               '')
             ];
+            hardeningDisable = [ "fortify" ];
             shellHook = ''
               moq_workspace_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
               if [ ! -d "$moq_workspace_root/bench/src/moq_workspace_bench" ]; then
                 moq_workspace_root="$(git rev-parse --show-superproject-working-tree)"
               fi
-              export PYTHONPATH="$moq_workspace_root/bench/src:$moq_workspace_root/moq-trace/python/src''${PYTHONPATH:+:$PYTHONPATH}"
+              export PYTHONPATH="$moq_workspace_root/bench/src:$moq_workspace_root/python/src''${PYTHONPATH:+:$PYTHONPATH}"
               unset moq_workspace_root
             '';
           };

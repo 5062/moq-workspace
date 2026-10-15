@@ -1,6 +1,7 @@
 # MoQ trace workspace
 
-Pins the MoQ trace toolkit, the instrumented relays, and the transport forks they
+Owns the local experiment and trace-analysis tools, and pins the Rust/C++
+instrumentation toolkit, instrumented relays, and transport forks they
 build on, so that one commit of this repository names a set of revisions that
 were checked together. It also holds what a cross-implementation bench needs
 beyond those: the reference peers, a launch profile per relay, and the hosts the
@@ -8,6 +9,7 @@ experiments run on.
 
 | Path | Contents |
 |---|---|
+| `python/` | Decoding, analysis, plots, verification, and native CTF reader; see `python/README.md` |
 | `bench/` | Python experiment runner and its tests; see `bench/README.md` |
 | `moq-bench/` | The implementation-independent reference peers; see `moq-bench/README.md` |
 | `profiles/` | One `just bench` launch profile per relay |
@@ -110,18 +112,32 @@ The hosts fetch the commit and its submodules' commits from GitHub, so push
 before a distributed run. A bench refuses to start while tracked files here have
 uncommitted changes, which the hosts would not see.
 
+## Inspecting traces
+
+The workspace shell also supplies `moq-trace analyze`, `moq-trace verify`, and
+`moq-trace plot`. `just decoder` builds their native CTF reader; `just bench` and
+`just run` do that automatically. See [the analysis documentation](python/README.md)
+for artifacts, figures, measurement semantics, and verification, and
+[the analysis benchmark](python/benchmarks/README.md) for repeatable timings.
+
+`just check-tools` checks Python analysis, plots, the native decoder, and the
+runner. `just check-contract` checks the instrumentation and compares real
+Rust/C++ captures using the workspace decoder.
+
 ## Changing the event contract
 
-A contract change spans the toolkit and every relay:
+A contract change spans the workspace analyzer, instrumentation toolkit, and
+affected relay/transport forks:
 
-1. Commit the change in `moq-trace/` and in each affected fork, on the branch
-   listed above. Submodules check out a detached commit, so switch to the branch
+1. Update the reader and validation in `python/` together with the providers
+   and facades in `moq-trace/`. Commit the toolkit and each affected fork on the
+   branch listed above. Submodules check out a detached commit, so switch to the branch
    first, for example `git -C relays/moq-dev-moq switch moq-trace`.
-2. Run `nix develop --command just check-all`, which runs the toolkit checks,
-   checks the forks' standalone pins, tests the bench peers and checks the bench
-   suite, lints the traced Rust relays, runs every relay's tests with tracing
-   compiled in, and builds every traced relay and the bench peers against the
-   working trees.
+2. Run `nix develop --command just check-all`, which checks the Rust/C++
+   instrumentation, Python tooling, native decoder, and captured event contract.
+   It also checks fork pins and the bench suite, tests the peers and traced
+   relays, verifies transport fixtures, and builds every traced relay and the
+   peers against the working trees.
 3. Push each submodule's branch, then commit the new pins here and push. Pushing
    the pins first would record commits that nobody else can fetch.
 

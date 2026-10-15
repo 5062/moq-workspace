@@ -3,8 +3,8 @@
 `moq-workspace-bench` runs the reference peers against the pinned relays, locally
 or across SSH hosts. This package owns workload configuration, relay profiles,
 sweeps, host placement, checkout synchronization, builds, and capture collection.
-It uses `moq-trace` for local capture primitives, decoding, analysis, artifact
-schemas, and plotting.
+It uses the workspace's `python/` tooling for capture primitives, decoding,
+analysis, artifact schemas, and plotting.
 
 From the workspace root:
 
@@ -15,18 +15,14 @@ nix develop --command just run experiment.toml --output artifacts/example
 nix develop --command just check-runner
 ```
 
-`just bench` and `just run` build the toolkit's native decoder before launching
+`just bench` and `just run` build the workspace's native decoder before launching
 the runner. Build the relays and reference peers first for local experiments.
 Inside the workspace shell, the equivalent commands are
 `moq-workspace-bench bench ...` and `moq-workspace-bench run CONFIG ...`.
-`moq-trace analyze`, `moq-trace verify`, and `moq-trace plot` remain toolkit commands.
-
-The workspace shell loads both source packages. To install them instead, build
-and install `./python` from the toolkit root in its development shell, then
-install the runner with `python -m pip install ./bench` from the workspace root.
-The runner depends on the toolkit and adds `asyncssh` for distributed runs. Its
-tests use stand-in peers and SSH connections; they need no remote hosts or
-privileged packet capture.
+`moq-trace analyze`, `moq-trace verify`, and `moq-trace plot` use the workspace's
+Python analysis tooling. The workspace shell loads both source packages and
+provides their dependencies. Tests use stand-in peers and SSH connections; they
+need no remote hosts or privileged packet capture.
 
 ## Workloads and suites
 
@@ -187,4 +183,4 @@ publisher and up to two subscriber connections.
 
 Traced experiments render figures unless `render = false` or `--no-render` is
 set. Re-render a run, bench, or sweep with `moq-trace plot PATH`; see the
-[toolkit's figures documentation](../moq-trace/README.md#figures).
+[analysis figures documentation](../python/README.md#figures).

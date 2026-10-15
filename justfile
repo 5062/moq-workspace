@@ -32,6 +32,34 @@ bump *paths:
 check-trace:
     cd moq-trace && nix develop --command just check
 
+# Build the local Python decoder with optimization for real capture ingestion.
+decoder:
+    nix develop {{ root }} --command cargo build --locked --manifest-path python/native/Cargo.toml --target-dir target/ctf --release --features extension-module
+    cp target/ctf/release/lib_native_ctf.so python/src/moq_trace/_native_ctf.abi3.so
+
+# Check the native decoder, Python analysis/plots, runner, and provider contract.
+check-tools: decoder check-runner
+    nix develop {{ root }} --command moq-trace --help
+    nix develop {{ root }} --command cargo fmt --manifest-path python/native/Cargo.toml --check
+    nix develop {{ root }} --command cargo test --locked --manifest-path python/native/Cargo.toml
+    nix develop {{ root }} --command cargo clippy --locked --manifest-path python/native/Cargo.toml --all-targets -- -D warnings
+    nix develop {{ root }} --command python -m unittest discover -s python/tests -v
+    nix develop {{ root }} --command ruff check python
+    nix develop {{ root }} --command ruff format --check python
+
+# Format the local Python tools and native decoder.
+fix-tools:
+    nix develop {{ root }} --command cargo fmt --manifest-path python/native/Cargo.toml
+    nix develop {{ root }} --command ruff check --fix python
+    nix develop {{ root }} --command ruff format python
+    nix develop {{ root }} --command ruff check --fix --config bench/pyproject.toml bench scripts/check-suite.py
+    nix develop {{ root }} --command ruff format --config bench/pyproject.toml bench scripts/check-suite.py
+
+# Compare actual Rust and C++ captures through the workspace decoder.
+check-contract: check-trace decoder
+    nix develop {{ trace_shell }} --command cargo build --manifest-path moq-trace/Cargo.toml --example facade_contract -p moq-trace --all-features
+    nix develop {{ root }} --command python python/checks/facade_contract.py
+
 # Install the toolkit's C++ facade and providers into moq-trace/target/install.
 install-trace:
     cd moq-trace && nix develop --command just install
@@ -81,14 +109,12 @@ fix-bench:
 # experiments/hosts.toml`. Relative paths resolve against the workspace root.
 # Run the workspace experiment runner with this workspace's suite.
 [positional-arguments]
-bench *args:
-    cd moq-trace && nix develop --command just decoder
+bench *args: decoder
     nix develop {{ root }} --command moq-workspace-bench bench "$@"
 
 # Run one experiment from TOML configuration, with optional --output.
 [positional-arguments]
-run *args:
-    cd moq-trace && nix develop --command just decoder
+run *args: decoder
     nix develop {{ root }} --command moq-workspace-bench run "$@"
 
 # Lint the traced Rust relays against the pinned toolkit and forks.
@@ -109,22 +135,22 @@ test-relays: install-trace
     cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/test.sh
 
 # Capture each QUIC stack's own fixtures under LTTng and check the events with
-# the toolkit's `moq-trace verify`: Quinn's blocked transfers, QUICHE's packet,
+# the workspace's `moq-trace verify`: Quinn's blocked transfers, QUICHE's packet,
 # batch, and stream fixtures, and moxygen's relay session for mvfst. Each script
-# runs in its stack's shell, entered from the toolkit's, which puts moq-trace on
+# runs in its stack's shell, entered from the workspace's, which puts moq-trace on
 # PATH. Quinn builds against the pinned toolkit, so its lockfile is put back.
-test-trace: install-trace
+test-trace: install-trace decoder
     #!/usr/bin/env bash
     set -euo pipefail
     lock=$(mktemp)
     cp deps/quinn/Cargo.lock "$lock"
     trap 'mv "$lock" deps/quinn/Cargo.lock' EXIT
-    nix develop {{ trace_shell }} --command deps/quinn/moq_trace/test_trace.sh --config {{ patches }}
-    nix develop {{ trace_shell }} --command bash -c 'cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- moq_trace/test_trace.sh'
-    nix develop {{ trace_shell }} --command bash -c 'cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/test_trace.sh'
+    nix develop {{ root }} --command deps/quinn/moq_trace/test_trace.sh --config {{ patches }}
+    nix develop {{ root }} --command bash -c 'cd relays/google-quiche && MOQ_TRACE_PREFIX={{ install_prefix }} devenv shell -- moq_trace/test_trace.sh'
+    nix develop {{ root }} --command bash -c 'cd relays/facebook-moxygen && MOQ_TRACE_PREFIX={{ install_prefix }} MVFST_SOURCE_DIR={{ root }}/deps/mvfst nix develop --command moq_trace/test_trace.sh'
 
 # Every check, test, and traced build that a pin bump must pass.
-check-all: check-trace check-pins check-bench clippy-relays test-relays test-trace build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
+check-all: check-contract check-tools check-pins check-bench clippy-relays test-relays test-trace build-moq-dev-moq build-cloudflare-moq-rs build-google-quiche build-facebook-moxygen build-moq-bench
 
 # Run cargo in a component's development shell with the workspace patches. A
 # submodule builds in its own shell, and the workspace's own code in the
