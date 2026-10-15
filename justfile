@@ -78,6 +78,7 @@ fix-bench:
 # Run `moq-trace bench` with this workspace's suite.
 [positional-arguments]
 bench *args:
+    cd moq-trace && nix develop --command just decoder
     nix develop {{ trace_shell }} --command moq-trace bench "$@"
 
 # Lint the traced Rust relays against the pinned toolkit and forks.
