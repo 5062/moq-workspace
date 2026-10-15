@@ -1,4 +1,4 @@
-# What `moq-trace bench` runs from this workspace. Relative paths resolve against
+# What `just bench` runs from this workspace. Relative paths resolve against
 # this file's directory, and so do the profiles' relative checkouts.
 
 # One launch profile per relay implementation.

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moq-workspace-bench"
+version = "0.1.0"
+description = "Run the pinned moq-workspace relay experiments."
+requires-python = ">=3.11"
+dependencies = ["moq-trace==0.1.0", "asyncssh>=2.14"]
+
+[project.scripts]
+moq-workspace-bench = "moq_workspace_bench.cli:main"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["moq_workspace_bench"]
+
+[tool.ruff.format]
+quote-style = "double"

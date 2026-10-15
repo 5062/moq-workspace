@@ -1,6 +1,5 @@
 # Run through the workspace shell: `nix develop --command just <recipe>`.
-# Each component builds inside its own development shell, so this shell only
-# carries git and just.
+# The workspace shell runs experiments; each component builds in its own shell.
 
 root := justfile_directory()
 patches := root / ".cargo/patches.toml"
@@ -8,8 +7,7 @@ patches := root / ".cargo/patches.toml"
 # The toolkit's C++ facade and providers, installed for the C++ relays.
 install_prefix := root / "moq-trace/target/install"
 
-# The toolkit's development shell, which carries Rust, Python, and LTTng. The
-# workspace's own code, moq-bench and the bench suite, runs in it.
+# The toolkit's development shell carries the Rust toolchain used by moq-bench.
 trace_shell := root / "moq-trace"
 
 default:
@@ -63,11 +61,17 @@ build-moq-bench:
 # Also checks that every relay profile loads and that moq-trace.toml pins the
 # protocol the peers pin.
 # Test and lint the bench peers, and check the bench suite.
-check-bench:
+check-bench: check-runner
     just _cargo moq-bench test --all-features
     just _cargo moq-bench clippy --all-targets --all-features -- -D warnings
     cd moq-bench && nix develop {{ trace_shell }} --command cargo fmt --all --check
-    nix develop {{ trace_shell }} --command python scripts/check-suite.py
+
+# Check experiment orchestration and the suite against the workspace's peers.
+check-runner:
+    nix develop {{ root }} --command python -m unittest discover -s bench/tests -v
+    nix develop {{ root }} --command python scripts/check-suite.py
+    nix develop {{ root }} --command ruff check --config bench/pyproject.toml bench scripts/check-suite.py
+    nix develop {{ root }} --command ruff format --check --config bench/pyproject.toml bench scripts/check-suite.py
 
 # Format the bench peers.
 fix-bench:
@@ -75,11 +79,17 @@ fix-bench:
 
 # For example `just bench --relay moq-dev-moq,google-quiche --hosts
 # experiments/hosts.toml`. Relative paths resolve against the workspace root.
-# Run `moq-trace bench` with this workspace's suite.
+# Run the workspace experiment runner with this workspace's suite.
 [positional-arguments]
 bench *args:
     cd moq-trace && nix develop --command just decoder
-    nix develop {{ trace_shell }} --command moq-trace bench "$@"
+    nix develop {{ root }} --command moq-workspace-bench bench "$@"
+
+# Run one experiment from TOML configuration, with optional --output.
+[positional-arguments]
+run *args:
+    cd moq-trace && nix develop --command just decoder
+    nix develop {{ root }} --command moq-workspace-bench run "$@"
 
 # Lint the traced Rust relays against the pinned toolkit and forks.
 clippy-relays:
@@ -118,7 +128,7 @@ check-all: check-trace check-pins check-bench clippy-relays test-relays test-tra
 
 # Run cargo in a component's development shell with the workspace patches. A
 # submodule builds in its own shell, and the workspace's own code in the
-# toolkit's, since this repository's shell carries only git and just. The
+# toolkit's, which supplies moq-bench's Rust toolchain. The
 # patches rewrite Cargo.lock to path sources, so the committed lockfile is put
 # back afterwards and a submodule never shows the rewrite as a change. The
 # config follows the subcommand: cargo does not forward a --config given before

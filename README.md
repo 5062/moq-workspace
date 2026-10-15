@@ -8,8 +8,9 @@ experiments run on.
 
 | Path | Contents |
 |---|---|
+| `bench/` | Python experiment runner and its tests; see `bench/README.md` |
 | `moq-bench/` | The implementation-independent reference peers; see `moq-bench/README.md` |
-| `profiles/` | One `moq-trace bench` launch profile per relay |
+| `profiles/` | One `just bench` launch profile per relay |
 | `moq-trace.toml` | The bench suite: the profiles, the peers, and the protocol every relay negotiates |
 | `experiments/` | Host configurations for distributed runs |
 | `docs/` | The relay processing taxonomy and cross-implementation plans |
@@ -83,7 +84,7 @@ lives here and always builds through the patches, so it has no standalone pins.
 
 ## Running benches
 
-`just bench` runs `moq-trace bench` from the workspace root with the suite in
+`just bench` runs the workspace experiment runner from the workspace root with the suite in
 `moq-trace.toml`, so each profile's relay is the pinned submodule under
 `relays/`:
 
@@ -92,9 +93,9 @@ nix develop --command just build-moq-dev-moq build-moq-bench
 nix develop --command just bench --relay moq-dev-moq --subscribers 4
 ```
 
-Inside the toolkit's shell, `nix develop ./moq-trace`, plain `moq-trace bench`
-from the workspace root does the same. Build each relay you bench first, and see
-the toolkit's README for the workload flags.
+Inside the workspace shell, `moq-workspace-bench bench` does the same. Build
+each relay you bench first, and see [the runner documentation](bench/README.md)
+for workload flags, sweeps, packet capture, and distributed runs.
 
 For a distributed run, `--hosts experiments/hosts.toml` places the roles on other
 hosts, each with a workspace checkout at its `checkout`. The hosts need only ssh,
