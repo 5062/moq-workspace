@@ -145,6 +145,7 @@ class RunMetadata(ArtifactModel):
     commands: CommandSet | None = None
     # Unset when no network capture was supplied beside the trace.
     network: NetworkCapabilities | None = None
+    monitoring: bool = False
 
 
 class ComparisonRun(ArtifactModel):

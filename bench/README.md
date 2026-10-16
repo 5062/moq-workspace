@@ -158,9 +158,51 @@ peer on another host is not. A peer on the relay's host dials
 `relay_url` when the relay runs on the controller. Each host keeps its run
 directory under `workdir` (`~/moq-trace-runs` by default) for inspection.
 
-`--no-trace` runs the same workload without an LTTng session. Its runs keep only
-the peers' logs, which report throughput, frame rates, and mismatches, and
-produce no analysis artifact, so they are left out of any comparison.
+`--no-trace` runs the same workload without an LTTng session. Its runs keep
+the peers' logs and monitoring sidecars and summary, but produce no latency
+analysis artifact, so they are left out of any comparison.
+
+Every run samples the relay process's user/system CPU counters and approximate
+resident memory once per second. `--monitor-peers` also samples the publisher and
+subscriber processes, including on SSH hosts. One persistent stdlib Python
+collector runs on each measured host; sampling requires no sudo. Set
+`--monitor-interval-seconds 0.5` to change the cadence. CPU is reported in cores
+(1 core = 100%; a multithreaded relay may exceed it), with user/system CPU seconds,
+mean and sampled maximum RSS, and RSS growth. These are whole-process measurements;
+the trace's elapsed phases are not CPU time or per-object CPU attribution.
+
+The reference peers also record cumulative received payload bytes and completed
+objects per subscriber connection, once per second, in `subscriber.log` as
+`MOQ_BENCH_DELIVERY` JSON records. Goodput counts payload actually received at the
+subscriber, including each delivered copy in fan-out; it excludes transport
+overhead and retransmission traffic. Rebuild the reference peers after updating
+the runner. Alternate peer binaries must emit this schema or run with
+`--no-monitor-goodput`.
+
+`monitoring.json` names the raw `resources-*.jsonl` files and the hosts and PIDs of
+all roles. Host-local monotonic timestamps and process start ticks retain process
+identity. Remote clocks are mapped to the relay's monotonic axis with a bracketed
+clock probe; the manifest and legends retain the alignment uncertainty. This is
+approximate alignment, not synchronized clocks or a source of one-way latency.
+All collection stays local to its host and the files are retained on the controller,
+so later analysis needs no SSH connection.
+
+`monitoring-summary.json` reports resource usage, delivery rates per subscriber,
+and total delivery rates. Traced runs use the analysis's selected steady-state
+window; untraced runs use the runner's workload window after trimming warmup and
+cooldown. Rates use actual elapsed time and only complete observed intervals
+inside that window. Each summary reports `covered_seconds`; boundary intervals
+are omitted rather than interpolating completed objects. Very short runs may
+have memory samples but no CPU or delivery interval. RSS is approximate, and its
+sampled maximum can miss brief peaks. Traced runs also render `monitoring.png` and
+resource/goodput comparisons. Every subscriber remains queryable even when a plot
+shows only representative connections.
+
+For matched monitoring-overhead controls, use
+`--no-monitor-resources --no-monitor-goodput` with the same workload. Monitoring
+defaults apply independently of `--trace`; packet capture and qlog remain opt-in.
+Measure perturbation at the workload and fan-out being compared before treating
+monitored results as equivalent to the control.
 
 Every run also measures the network the relay saw, and renders it as
 `network.png` when anything was captured. `--capture-packets` (or
@@ -182,6 +224,13 @@ offset between the capture's wall clock and the trace clock, and `analyze
 --network` reads it for a trace analyzed by hand. A capture sees UDP sockets, not
 connections, so it splits traffic by direction; the qlog panels show the
 publisher and up to two subscriber connections.
+
+`capture-statistics.json` and the artifact's `network.capture_statistics` retain
+tcpdump's captured, filter-received, kernel-drop, and interface-drop counters.
+An unavailable interface counter is unknown, never zero. These are capture
+statistics, separate from the QUIC-declared losses in qlog. Wire validation still
+rejects captures with reported drops. QUIC-declared loss is the sender's recovery
+decision and can be spurious; it is not a direct measurement of path loss.
 
 ## Figures
 

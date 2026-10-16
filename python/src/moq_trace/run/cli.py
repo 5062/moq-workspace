@@ -59,6 +59,12 @@ def parser() -> argparse.ArgumentParser:
         metavar="MANIFEST",
         help="network.json from a run directory, to analyze its packet capture and qlog.",
     )
+    analyze.add_argument(
+        "--monitoring",
+        type=pathlib.Path,
+        metavar="MANIFEST",
+        help="monitoring.json from a run directory, for CPU, RSS, and endpoint goodput.",
+    )
 
     verify = commands.add_parser(
         "verify",
@@ -122,6 +128,7 @@ def _run(args: argparse.Namespace) -> None:
             pid=args.pid,
             transport_profile=args.transport_profile,
             network=args.network,
+            monitoring=args.monitoring,
         )
         print(args.output.resolve())
     elif args.command == "verify":

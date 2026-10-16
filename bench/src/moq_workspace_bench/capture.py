@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import json
 import logging
 import pathlib
 import shlex
 from collections.abc import Sequence
 
+from moq_trace.analysis.network import capture_statistics
 from moq_trace.manifest import MANIFEST, QLOG_ENVIRONMENT, NetworkManifest
 from moq_trace.run.hosts import Clock, Host, Process
 from moq_trace.run.lttng import LttngSession
 
 from . import tls
 from .config import ExperimentConfig
+from .monitoring import Monitoring
 from .placement import Placement
 from .tcpdump import start_packet_capture
 
@@ -34,6 +37,7 @@ class Capture:
     relay_pid: int
     pids: tuple[int, ...]
     network: pathlib.Path
+    monitoring: pathlib.Path | None = None
 
 
 def _key_log(role: str) -> str:
@@ -87,6 +91,9 @@ class CaptureSession:
         self.tcpdump: Process | None = None
         self.tracked: list[int] = []
         self.relay_pid = 0
+        self.roles: dict[str, Process] = {}
+        self.monitor: Monitoring | None = None
+        self.monitoring_path: pathlib.Path | None = None
 
     async def __aenter__(self) -> CaptureSession:
         await self.cleanup.__aenter__()
@@ -126,6 +133,8 @@ class CaptureSession:
         host = self.placement.host(role)
         directory = self.placement.directory(host)
         env = {}
+        if role == "subscriber" and self.config.monitor_goodput:
+            env["MOQ_BENCH_DELIVERY"] = "1"
         if role == "relay" and self.config.qlog:
             env[QLOG_ENVIRONMENT] = f"{directory}/qlog"
         elif role != "relay" and self.config.capture_packets:
@@ -133,11 +142,24 @@ class CaptureSession:
             env["SSLKEYLOGFILE"] = f"{directory}/{_key_log(role)}"
         process = await host.start(role, command, directory, self.output / f"{role}.log", env=env or None)
         self.cleanup.push_async_callback(process.close)
+        self.roles[role] = process
         if role != "relay" and host is self.relay:
             if self.session is not None:
                 await self.session.track(process.pid)
             self.tracked.append(process.pid)
         return process
+
+    async def start_monitoring(self) -> Sequence[Process]:
+        if not (self.config.monitor_resources or self.config.monitor_goodput):
+            return ()
+        self.monitor = Monitoring(self.config, self.placement, self.roles)
+        self.cleanup.push_async_callback(self.monitor.close)
+        await self.monitor.start()
+        return self.monitor.collectors
+
+    async def stop_monitoring(self) -> None:
+        if self.monitor is not None:
+            self.monitoring_path = await self.monitor.finish()
 
     async def begin(self, relay_pid: int) -> None:
         """Begin tracing after relay readiness and before peers are spawned."""
@@ -154,6 +176,8 @@ class CaptureSession:
 
         if self.tcpdump is not None:
             await self.tcpdump.stop(True)
+            statistics = capture_statistics(self.output / "tcpdump.log")
+            (self.output / "capture-statistics.json").write_text(json.dumps(statistics, indent=2) + "\n")
         if self.session is not None:
             await self.session.finish()
         recorded = [
@@ -175,4 +199,5 @@ class CaptureSession:
             relay_pid=self.relay_pid,
             pids=tuple(self.tracked),
             network=manifest,
+            monitoring=self.monitoring_path,
         )

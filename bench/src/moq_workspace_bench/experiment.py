@@ -87,7 +87,9 @@ async def _capture(config: ExperimentConfig, command: CommandSet, placement: Pla
             config.duration_seconds,
             config.cooldown_seconds,
         )
-        await _wait_for_workload((relay, subscriber, publisher), _run_seconds(config))
+        monitors = await capture.start_monitoring()
+        await _wait_for_workload((relay, subscriber, publisher, *monitors), _run_seconds(config))
+        await capture.stop_monitoring()
         _log.info("workload finished; stopping the subscriber, publisher and relay")
         await subscriber.stop(True)
         await publisher.stop(True)
@@ -143,6 +145,10 @@ async def run(config: ExperimentConfig, pool: SshPool) -> pathlib.Path:
     command = commands(config, placement, await placement.peer_cpus())
     capture = await _capture(config, command, placement)
     if capture.trace is None:
+        if capture.monitoring is not None:
+            from moq_trace.analysis.monitoring import write_summary
+
+            await asyncio.to_thread(write_summary, capture.monitoring)
         return output
     database = output / "analysis.duckdb"
     binaries = await _binaries(placement)
@@ -171,8 +177,13 @@ async def run(config: ExperimentConfig, pool: SshPool) -> pathlib.Path:
         binaries=binaries,
         commands=command,
         network=capture.network,
+        monitoring=capture.monitoring,
     )
     await asyncio.to_thread(_validate_workload, database)
+    if capture.monitoring is not None:
+        from moq_trace.analysis.monitoring import write_summary
+
+        await asyncio.to_thread(write_summary, capture.monitoring, database)
     if config.render:
         _log.info("rendering figures into %s", output / "plots")
         await asyncio.to_thread(render, database)

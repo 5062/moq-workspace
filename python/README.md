@@ -84,6 +84,8 @@ name and leaves any others in place.
 | `stability.png` | Per-second p50 and p99 of object copies and of QUIC packets, on one time axis |
 | `object_timeline.png` | QUIC and MoQ phases of objects nearest the mean, median, and p99 MoQ latency, with actual latency and active time, from each object's first RX packet |
 | `network.png` | Throughput, RTT, lost packets, and congestion window; only when a capture or qlog was taken |
+| `monitoring.png` | Process CPU cores, approximate RSS, delivered payload goodput and completed objects; when monitoring sidecars were supplied |
+| `relays_monitoring.png`, `comparison_monitoring.png` | Mean relay CPU, sampled maximum RSS and total subscriber goodput across runs |
 | `relays_cdf.png`, `relays_segments.png`, `relays_breakdown.png`, `relays_moq_work.png` | The relays of one bench, overlaid |
 | `comparison_cdf.png`, `comparison_segments.png`, `comparison_breakdown.png`, `comparison_moq_work.png` | One relay's runs of a `--sweep`, overlaid |
 
@@ -105,6 +107,21 @@ recording holds more than one. Every row also keeps the `vtid` of the thread
 that emitted it, which tells work one call ran inside another from the same work
 run in parallel on another thread. A recording without either context is
 rejected.
+
+Pass `--monitoring RUN/monitoring.json` to `moq-trace analyze` to ingest saved
+resource counters and endpoint delivery counters. `monitoring.hosts` retains
+host/role/PID identity and remote clock alignment uncertainty;
+`monitoring.resources` and `monitoring.deliveries` retain raw samples;
+`monitoring.resource_intervals` and `monitoring.delivery_intervals` store rates
+from actual counter deltas and elapsed time. Their `*_summary` tables use only
+complete intervals within `model.window`, with explicit `covered_seconds`.
+CPU cores are total process CPU seconds divided by wall seconds. RSS is sampled
+resident memory, not heap size. Delivered bytes exclude QUIC overhead and count
+each subscriber's received copy; UDP throughput includes transport traffic.
+The comparison snapshot copies the monitoring summaries so comparison figures
+need no source run directories. Artifact schema version 10 requires re-analysis
+of older captures; monitoring sidecars are optional, with no synthetic zeros for
+missing measurements.
 
 The MoQ `full_span` starts where a stack first hands an object to MoQ and ends
 where MoQ finishes writing the copy, and stacks place that boundary differently,

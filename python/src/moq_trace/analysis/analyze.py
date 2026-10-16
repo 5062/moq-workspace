@@ -28,6 +28,7 @@ from ..metadata import (
     Workload,
 )
 from . import coverage, phases, sql, wire
+from . import monitoring as monitoring_capture
 from . import network as network_capture
 from .artifact import write_metadata
 
@@ -381,6 +382,7 @@ def _write_run_metadata(
     binaries: Binaries | None,
     commands: CommandSet | None,
     network: NetworkCapabilities | None = None,
+    monitoring: bool = False,
 ) -> None:
     """Record the workload, counts, and experiment provenance in the artifact."""
 
@@ -426,6 +428,7 @@ def _write_run_metadata(
             binaries=binaries,
             commands=commands,
             network=network,
+            monitoring=monitoring,
         ),
     )
 
@@ -444,6 +447,7 @@ def run(
     binaries: Binaries | None = None,
     commands: CommandSet | None = None,
     network: pathlib.Path | None = None,
+    monitoring: pathlib.Path | None = None,
 ) -> None:
     """Analyze CTF into one atomically published DuckDB database.
 
@@ -486,6 +490,19 @@ def run(
             _derive_samples(connection, origin)
             capabilities = None if network is None else _ingest_network(connection, network, origin)
             _define_metrics(connection)
+            connection.execute(sql.read("monitoring/schema"))
+            if monitoring is not None:
+                start, end = connection.execute("SELECT start_ns, end_ns FROM model.window").fetchone()
+                monitoring_capture.ingest(
+                    connection,
+                    monitoring,
+                    origin_ns=origin,
+                    start_ns=start,
+                    end_ns=end,
+                    subscribers=workload.subscribers,
+                    relay_pid=analyzed,
+                )
+            monitoring_capture.materialize(connection)
             _verify_transport_metrics(connection, transport_profile)
             _write_run_metadata(
                 connection,
@@ -499,6 +516,7 @@ def run(
                 binaries=binaries,
                 commands=commands,
                 network=capabilities,
+                monitoring=monitoring is not None,
             )
             connection.execute("CHECKPOINT")
         os.replace(database, output)

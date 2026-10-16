@@ -64,6 +64,7 @@ _BENCH_SETTINGS = (
     "port",
     "relay_cpu",
     "bench_bin",
+    "monitor_interval_seconds",
 )
 
 
@@ -103,7 +104,7 @@ def parser() -> argparse.ArgumentParser:
         "--trace",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Capture and analyze LTTng traces. --no-trace keeps only the peers' logs (default: on).",
+        help="Capture and analyze LTTng traces. --no-trace keeps logs and monitoring sidecars (default: on).",
     )
     bench.add_argument(
         "--output",
@@ -120,6 +121,12 @@ def parser() -> argparse.ArgumentParser:
     )
     for name in _BENCH_SETTINGS:
         _add_setting(bench, name)
+    for name, help in (
+        ("monitor_resources", "Sample relay CPU and RSS (default: on)."),
+        ("monitor_peers", "Also sample publisher and subscriber CPU/RSS (default: off)."),
+        ("monitor_goodput", "Record delivered payload counters per subscriber connection (default: on)."),
+    ):
+        bench.add_argument(f"--{name.replace('_', '-')}", action=argparse.BooleanOptionalAction, help=help)
     bench.add_argument(
         "--sweep",
         type=_sweep,
@@ -174,7 +181,15 @@ def _run(args: argparse.Namespace) -> None:
         from .bench import bench, default_output
         from .suite import load
 
-        names = [*_BENCH_SETTINGS, "capture_packets", "qlog", "render"]
+        names = [
+            *_BENCH_SETTINGS,
+            "capture_packets",
+            "qlog",
+            "render",
+            "monitor_resources",
+            "monitor_peers",
+            "monitor_goodput",
+        ]
         settings = {name: getattr(args, name) for name in names if getattr(args, name) is not None}
         if args.sweep is not None and args.sweep.dimension in settings:
             flag = args.sweep.dimension.replace("_", "-")

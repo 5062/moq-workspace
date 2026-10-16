@@ -72,6 +72,15 @@ accepts every client flag, because both flatten those configs. `--duration`,
 `--report`, `--fps`, `--frame-size`, and `--group-size` are the peers' own, and the
 server logs `listening` once its listener is bound so a runner can wait for it.
 
+With `MOQ_BENCH_DELIVERY=1`, the client additionally writes version-1
+`MOQ_BENCH_DELIVERY {JSON}` records to stdout at startup, once per second, and
+at orderly shutdown. Each record carries Linux `CLOCK_MONOTONIC` nanoseconds,
+PID, a zero-based connection index, and cumulative received payload `bytes` and
+completed `objects`. The workspace uses these for endpoint goodput independently
+of tracing, packet capture, and qlog. The regular aggregate stats/readiness lines
+are still emitted at `--report` intervals. These are observed payload deliveries;
+short groups and mismatches remain reported separately in the regular stats.
+
 `--connections`, `--broadcasts`, and `--subscribe` are scalars, not the ranges
 `rs/moq-bench` takes, and every count is per session: `--connections 3 --subscribe 1`
 is three sessions with one subscription each. Broadcasts publish under

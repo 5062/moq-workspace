@@ -13,7 +13,11 @@ use crate::stats::Stats;
 /// and every frame of the group is checked against it, which catches truncation or
 /// re-framing anywhere on the path without needing to know how the publisher was
 /// configured.
-pub async fn drain(broadcast: broadcast::Consumer, stats: Arc<Stats>) -> anyhow::Result<()> {
+pub async fn drain(
+    broadcast: broadcast::Consumer,
+    stats: Arc<Stats>,
+    connection: usize,
+) -> anyhow::Result<()> {
     let mut track = broadcast.track(TRACK)?.subscribe(None).await?;
     let _live = stats.subscription();
 
@@ -31,7 +35,7 @@ pub async fn drain(broadcast: broadcast::Consumer, stats: Arc<Stats>) -> anyhow:
                 mismatched = true;
             }
             frames += 1;
-            stats.frame_recv(frame.payload.len());
+            stats.frame_recv(connection, frame.payload.len());
         }
 
         // A group that never showed a keyframe lost its opening frames, which a relay

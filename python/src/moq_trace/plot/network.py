@@ -188,4 +188,10 @@ def plot_network(
             _no_data(loss, "Losses occurred only on connections not shown")
     for axis in (throughput, rtt, loss, window):
         axis.grid(alpha=0.25)
+    if packets:
+        stats = connection.execute("SELECT kernel_drops, interface_drops FROM network.capture_statistics").fetchone()
+        if stats is not None:
+            kernel, interface = stats
+            interface_text = interface if interface is not None else "unknown"
+            subtitle += f" | capture drops: kernel {kernel}, interface {interface_text}"
     _save(fig, path, f"Network during the run | {subtitle}")

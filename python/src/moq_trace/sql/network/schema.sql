@@ -1,5 +1,9 @@
 CREATE SCHEMA IF NOT EXISTS network;
 
+CREATE TABLE network.capture_statistics (
+    captured BIGINT, received_by_filter BIGINT, kernel_drops BIGINT, interface_drops BIGINT
+);
+
 CREATE TABLE network.datagrams (
     elapsed_ns BIGINT NOT NULL,
     direction VARCHAR,

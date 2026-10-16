@@ -130,8 +130,8 @@ class ExperimentConfig(StrictModel):
     cooldown_seconds: float = Field(default=1.0, ge=0, description="Run time trimmed from the back of the window.")
     port: int = Field(default=4443, gt=0, le=65_535, description="UDP port every relay listens on.")
     transport_profile: TransportProfile = "generic"
-    # Off runs the same workload without an LTTng session, so the run keeps only the
-    # peers' logs and produces no analysis artifact.
+    # Off runs the same workload without an LTTng session, retaining logs and
+    # monitoring sidecars without a latency analysis artifact.
     trace: bool = True
     # Record a full packet capture of the relay's port with tcpdump, which needs
     # passwordless sudo, and have the peers log their TLS secrets. The analysis
@@ -142,6 +142,10 @@ class ExperimentConfig(StrictModel):
     # relay that honors it serializes an event per packet, which costs relay CPU
     # and so perturbs the latency being measured.
     qlog: bool = False
+    monitor_resources: bool = True
+    monitor_peers: bool = False
+    monitor_goodput: bool = True
+    monitor_interval_seconds: float = Field(default=1.0, gt=0, description="Resource sample interval in seconds.")
     render: bool = True
 
     @field_validator("relay_bin", "bench_bin")

@@ -31,6 +31,7 @@ lttng = ["moq-net/trace"]
 anyhow = { version = "1", features = ["backtrace"] }
 clap = { version = "4", features = ["derive", "env"] }
 humantime = "2.3"
+libc = "0.2"
 moq-native = { git = "https://github.com/5062/moq", branch = "moq-trace", default-features = false, features = [
     "aws-lc-rs",
     "quinn",

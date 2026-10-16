@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import tempfile
 import time
@@ -80,6 +81,33 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.track.await_args_list, [mock.call(result.pids[1]), mock.call(result.pids[2])])
         session.finish.assert_awaited_once()
 
+    async def test_resource_collectors_record_local_and_remote_processes_and_stop_cleanly(self) -> None:
+        config = self._config(
+            trace=False,
+            monitor_peers=True,
+            monitor_goodput=False,
+            monitor_interval_seconds=0.05,
+            hosts=Hosts(subscriber=self._remote("peer")),
+            relay_url="https://relay:4443",
+        )
+        _, result = await self._capture(config)
+        manifest = json.loads(result.monitoring.read_text())
+        self.assertEqual(len(manifest["hosts"]), 2)
+        sampled = set()
+        for host in manifest["hosts"]:
+            rows = [json.loads(line) for line in (config.output / host["resources"]).read_text().splitlines()]
+            sampled.update(row["role"] for row in rows)
+            self.assertGreaterEqual(len(rows), 2)
+            self.assertTrue(all(host["roles"][row["role"]] == row["pid"] for row in rows))
+        self.assertEqual(sampled, {"relay", "publisher", "subscriber"})
+        self.assertGreater(manifest["end_ns"], manifest["start_ns"])
+
+    async def test_monitoring_can_be_disabled_for_overhead_controls(self) -> None:
+        config = self._config(trace=False, monitor_resources=False, monitor_goodput=False)
+        _, result = await self._capture(config)
+        self.assertIsNone(result.monitoring)
+        self.assertFalse(list(config.output.glob("resources-*.jsonl")))
+
     async def test_a_failed_recording_open_closes_the_partial_session(self) -> None:
         with mock.patch.object(capture, "LttngSession", autospec=True) as session_class:
             session = session_class.return_value
@@ -135,6 +163,7 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
 
         async def start(host, directory, port, log):
             pathlib.Path(directory, "relay.pcap").write_bytes(b"pcap")
+            log.write_text("1 packet captured\n1 packet received by filter\n0 packets dropped by kernel\n")
             return tcpdump_process
 
         config = self._config(trace=False, capture_packets=True)
@@ -157,6 +186,7 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
 
         async def start(host, directory, port, log):
             pathlib.Path(directory, "relay.pcap").write_bytes(b"pcap")
+            log.write_text("1 packet captured\n1 packet received by filter\n0 packets dropped by kernel\n")
             return tcpdump_process
 
         config = self._config(

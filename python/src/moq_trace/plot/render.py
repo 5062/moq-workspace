@@ -23,6 +23,7 @@ from . import (
     plot_stability,
     plot_transport_waits,
 )
+from .monitoring import plot_monitoring, plot_monitoring_comparison
 
 
 def _describe(metadata: RunMetadata, varied: str | None = None) -> str:
@@ -77,6 +78,8 @@ def _render_run(
     plot_moq_work(plots / "moq_work.png", "MoQ work", subtitle, runs)
     plot_transport_waits(plots / "transport_waits.png", "Transport waits", subtitle, runs)
     plot_stability(plots / "stability.png", subtitle, connection)
+    if metadata.monitoring:
+        plot_monitoring(plots / "monitoring.png", subtitle, connection)
     network = metadata.network
     if network is not None and (network.packets or network.qlog_connections):
         plot_network(
@@ -119,6 +122,8 @@ def _render_comparison(
     plot_breakdown(plots / f"{prefix}_breakdown.png", f"Where the time goes by {dimension}", subtitle, runs)
     plot_moq_work(plots / f"{prefix}_moq_work.png", f"MoQ work by {dimension}", subtitle, runs)
     plot_transport_waits(plots / f"{prefix}_transport_waits.png", f"Transport waits by {dimension}", subtitle, runs)
+    if any(summary.monitoring for summary in summaries):
+        plot_monitoring_comparison(plots / f"{prefix}_monitoring.png", subtitle, runs)
 
 
 def render(path: pathlib.Path) -> None:

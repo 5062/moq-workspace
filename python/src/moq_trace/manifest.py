@@ -7,6 +7,7 @@ capture, so it lives outside both: the run layer must not import the ingesters.
 from __future__ import annotations
 
 import pathlib
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,6 +19,61 @@ MANIFEST = "network.json"
 # Environment variable that tells a relay where to write qlog. Cloudflare quiche
 # and several other QUIC stacks read the same name.
 QLOG_ENVIRONMENT = "QLOGDIR"
+
+MONITORING_MANIFEST = "monitoring.json"
+
+
+class MonitoringHost(BaseModel):
+    """Host-local clocks mapped to the relay clock with an explicit error bound."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    host: str
+    roles: dict[Literal["relay", "publisher", "subscriber"], int]
+    # Host monotonic minus relay monotonic; zero on the relay host.
+    offset_ns: int
+    uncertainty_ns: int = Field(ge=0)
+    resources: str | None = None
+    resource_roles: tuple[Literal["relay", "publisher", "subscriber"], ...] = ()
+
+
+class MonitoringManifest(BaseModel):
+    """Portable sidecars, including endpoint logs, usable without a live host."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    schema_version: Literal[1] = 1
+    hosts: tuple[MonitoringHost, ...]
+    start_ns: int = Field(ge=0)
+    end_ns: int = Field(ge=0)
+    interval_seconds: float = Field(gt=0)
+    subscribers: int = Field(gt=0)
+    goodput: bool
+
+
+class ResourceSample(BaseModel):
+    """Raw procfs counters. PID plus start ticks identifies one process lifetime."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    schema_version: Literal[1]
+    role: Literal["relay", "publisher", "subscriber"]
+    pid: int = Field(gt=0)
+    start_ticks: int = Field(ge=0)
+    monotonic_ns: int = Field(ge=0)
+    clock_ticks: int = Field(gt=0)
+    user_ticks: int = Field(ge=0)
+    system_ticks: int = Field(ge=0)
+    rss_bytes: int = Field(ge=0)
+
+
+class DeliverySample(BaseModel):
+    """Cumulative payload counters from one reference peer connection."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    schema_version: Literal[1]
+    monotonic_ns: int = Field(ge=0)
+    pid: int = Field(gt=0)
+    connection: int = Field(ge=0)
+    bytes: int = Field(ge=0)
+    objects: int = Field(ge=0)
 
 
 class NetworkManifest(BaseModel):

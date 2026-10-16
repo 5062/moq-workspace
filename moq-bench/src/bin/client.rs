@@ -116,8 +116,8 @@ async fn main() -> anyhow::Result<()> {
     let mut config = args.client.clone();
     config.version = versions().iter().copied().collect();
 
-    let stats = Arc::new(Stats::default());
-    tokio::spawn(stats.clone().report(args.report));
+    let stats = Arc::new(Stats::new(args.connections.try_into()?));
+    let reporter = tokio::spawn(stats.clone().report(args.report));
 
     let run = args
         .run
@@ -159,6 +159,11 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    reporter.abort();
+    let _ = reporter.await;
+    if std::env::var_os("MOQ_BENCH_DELIVERY").is_some() {
+        stats.report_delivery();
+    }
     Ok(())
 }
 
@@ -206,7 +211,7 @@ async fn drive(session: Session) -> anyhow::Result<()> {
     }
 
     if subscribe > 0 {
-        tokio::spawn(watch(announced, subscribe, stats.clone()));
+        tokio::spawn(watch(announced, subscribe, stats.clone(), index as usize));
     }
 
     let client = client.with_publisher(&published).with_subscriber(remote);
@@ -225,7 +230,7 @@ async fn drive(session: Session) -> anyhow::Result<()> {
 }
 
 /// Subscribe to the first `want` announced broadcasts, including this session's own.
-async fn watch(mut announced: announce::Consumer, want: u64, stats: Arc<Stats>) {
+async fn watch(mut announced: announce::Consumer, want: u64, stats: Arc<Stats>, connection: usize) {
     let mut seen = HashSet::new();
     let mut tasks = JoinSet::new();
 
@@ -244,7 +249,7 @@ async fn watch(mut announced: announce::Consumer, want: u64, stats: Arc<Stats>) 
 
         let stats = stats.clone();
         tasks.spawn(async move {
-            if let Err(err) = subscribe::drain(broadcast, stats).await {
+            if let Err(err) = subscribe::drain(broadcast, stats, connection).await {
                 tracing::debug!(%path, %err, "subscription ended");
             }
         });

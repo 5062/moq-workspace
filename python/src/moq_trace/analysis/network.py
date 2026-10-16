@@ -39,6 +39,30 @@ _MONOTONIC_START = re.compile(r"monotonic_start_ns=(\d+)")
 _RTT_UNIT = re.compile(r"rtt_unit=(ms|s)\b")
 
 
+def capture_statistics(path: pathlib.Path) -> dict[str, int | None]:
+    """tcpdump's capture totals; absent interface counters stay unknown."""
+
+    try:
+        text = path.read_text()
+    except OSError as error:
+        raise TraceError(f"failed to read the capture log {path}: {error}") from error
+    names = {
+        "captured": "captured",
+        "received by filter": "received_by_filter",
+        "dropped by kernel": "kernel_drops",
+        "dropped by interface": "interface_drops",
+    }
+    reports = {
+        names[name]: int(count)
+        for count, name in re.findall(
+            r"(\d+) packets? (captured|received by filter|dropped by kernel|dropped by interface)", text
+        )
+    }
+    if "kernel_drops" not in reports:
+        raise TraceError(f"{path} does not report how many packets the capture dropped; tcpdump did not exit cleanly")
+    return {name: reports.get(name) for name in names.values()}
+
+
 def _endpoint(address: str, port: int) -> str:
     """Format an address and port, bracketing IPv6 so the port stays unambiguous."""
 
@@ -307,6 +331,9 @@ def ingest(
     """
 
     connection.execute(sql.read("network/schema"))
+    if manifest.capture_log is not None:
+        statistics = capture_statistics(root / manifest.capture_log)
+        connection.execute("INSERT INTO network.capture_statistics VALUES (?, ?, ?, ?)", list(statistics.values()))
     wire_packets = 0
     if manifest.pcap is not None:
         throughput = _Throughput(connection, manifest.realtime_offset_ns, origin_ns)

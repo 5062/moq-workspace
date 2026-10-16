@@ -29,6 +29,8 @@ _SNAPSHOT_TABLES = {
     "metrics.phase_totals": "SELECT * FROM run.metrics.phase_totals",
     "metrics.statistics": "SELECT * FROM run.metrics.statistics",
     "metrics.position_statistics": "SELECT * FROM run.metrics.position_statistics",
+    "monitoring.resource_summary": "SELECT * FROM run.monitoring.resource_summary",
+    "monitoring.delivery_summary": "SELECT * FROM run.monitoring.delivery_summary",
 }
 
 

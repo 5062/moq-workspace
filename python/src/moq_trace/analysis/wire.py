@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import ipaddress
 import pathlib
-import re
 from collections.abc import Iterable
 
 import duckdb
@@ -32,25 +31,18 @@ from ..decode import pcap, quic
 from ..errors import TraceError
 from ..manifest import NetworkManifest
 from . import coverage, sql
+from .network import capture_statistics
 
 # How far two samples of the realtime offset may differ, beyond their own
 # uncertainty, before the realtime clock counts as stepped.
 _CLOCK_STEP_NS = 1_000
 
-_DROPPED = re.compile(r"(\d+) packets? dropped by (kernel|interface)")
-
 
 def check_capture_log(path: pathlib.Path) -> None:
     """Reject a capture that dropped datagrams or did not report its totals."""
 
-    try:
-        text = path.read_text()
-    except OSError as error:
-        raise TraceError(f"failed to read the capture log {path}: {error}") from error
-    reports = _DROPPED.findall(text)
-    if not any(source == "kernel" for _, source in reports):
-        raise TraceError(f"{path} does not report how many packets the capture dropped; tcpdump did not exit cleanly")
-    dropped = sum(int(count) for count, _ in reports)
+    reports = capture_statistics(path)
+    dropped = (reports["kernel_drops"] or 0) + (reports["interface_drops"] or 0)
     if dropped:
         raise TraceError(f"the packet capture dropped {dropped} packets ({path}); re-record the run")
 

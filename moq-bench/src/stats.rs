@@ -7,17 +7,27 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 /// Frame, byte, and group counters shared across a peer's tasks.
-#[derive(Default)]
 pub struct Stats {
     connections: AtomicU64,
     frames_sent: AtomicU64,
     bytes_sent: AtomicU64,
-    frames_recv: AtomicU64,
-    bytes_recv: AtomicU64,
     groups_recv: AtomicU64,
     groups_short: AtomicU64,
     subscriptions: AtomicU64,
     mismatches: AtomicU64,
+    received: Vec<Received>,
+}
+
+#[derive(Default)]
+struct Received {
+    bytes: AtomicU64,
+    objects: AtomicU64,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Self::new(1)
+    }
 }
 
 /// A point-in-time copy of the counters, used to compute interval rates.
@@ -33,6 +43,19 @@ struct Counters {
 }
 
 impl Stats {
+    /// Allocate separate payload delivery counters for each client connection.
+    pub fn new(connections: usize) -> Self {
+        Self {
+            connections: AtomicU64::default(),
+            frames_sent: AtomicU64::default(),
+            bytes_sent: AtomicU64::default(),
+            groups_recv: AtomicU64::default(),
+            groups_short: AtomicU64::default(),
+            subscriptions: AtomicU64::default(),
+            mismatches: AtomicU64::default(),
+            received: (0..connections).map(|_| Received::default()).collect(),
+        }
+    }
     /// Count a session as live until the returned guard drops.
     ///
     /// The reporter logs this as `connections`, which is the counter a runner waits
@@ -50,9 +73,13 @@ impl Stats {
     }
 
     /// Record one received frame of `bytes` bytes.
-    pub fn frame_recv(&self, bytes: usize) {
-        self.frames_recv.fetch_add(1, Ordering::Relaxed);
-        self.bytes_recv.fetch_add(bytes as u64, Ordering::Relaxed);
+    pub fn frame_recv(&self, connection: usize, bytes: usize) {
+        self.received[connection]
+            .bytes
+            .fetch_add(bytes as u64, Ordering::Relaxed);
+        self.received[connection]
+            .objects
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     /// Record one received group.
@@ -85,6 +112,11 @@ impl Stats {
 
     /// Log a counter line every `interval` until the task is dropped.
     pub async fn report(self: Arc<Self>, interval: Duration) {
+        let delivery = std::env::var_os("MOQ_BENCH_DELIVERY").is_some();
+        let mut last_delivery = Instant::now();
+        if delivery {
+            self.report_delivery();
+        }
         // A fixed schedule keeps report times from drifting by the time each report
         // takes. A stalled report skips the ticks it missed rather than firing them in
         // a burst, and every rate divides by the time actually elapsed.
@@ -121,6 +153,31 @@ impl Stats {
                 mismatches,
                 "stats"
             );
+            if delivery && last_delivery.elapsed() >= Duration::from_secs(1) {
+                self.report_delivery();
+                last_delivery = Instant::now();
+            }
+        }
+    }
+
+    /// Write cumulative received payload counters on the Linux host clock.
+    pub fn report_delivery(&self) {
+        let mut instant = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        // SAFETY: instant points to a valid, writable timespec. Linux's monotonic
+        // clock is also the clock used by the resource collector and trace hooks.
+        let status = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut instant) };
+        assert_eq!(status, 0, "CLOCK_MONOTONIC unavailable");
+        let ns = instant.tv_sec as u64 * 1_000_000_000 + instant.tv_nsec as u64;
+        let pid = std::process::id();
+        for (connection, received) in self.received.iter().enumerate() {
+            let bytes = received.bytes.load(Ordering::Relaxed);
+            let objects = received.objects.load(Ordering::Relaxed);
+            println!(
+                "MOQ_BENCH_DELIVERY {{\"schema_version\":1,\"monotonic_ns\":{ns},\"pid\":{pid},\"connection\":{connection},\"bytes\":{bytes},\"objects\":{objects}}}"
+            );
         }
     }
 
@@ -128,8 +185,16 @@ impl Stats {
         Counters {
             frames_sent: self.frames_sent.load(Ordering::Relaxed),
             bytes_sent: self.bytes_sent.load(Ordering::Relaxed),
-            frames_recv: self.frames_recv.load(Ordering::Relaxed),
-            bytes_recv: self.bytes_recv.load(Ordering::Relaxed),
+            frames_recv: self
+                .received
+                .iter()
+                .map(|r| r.objects.load(Ordering::Relaxed))
+                .sum(),
+            bytes_recv: self
+                .received
+                .iter()
+                .map(|r| r.bytes.load(Ordering::Relaxed))
+                .sum(),
             groups_recv: self.groups_recv.load(Ordering::Relaxed),
             groups_short: self.groups_short.load(Ordering::Relaxed),
             mismatches: self.mismatches.load(Ordering::Relaxed),
@@ -151,6 +216,18 @@ impl Drop for Gauge<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn delivery_is_counted_per_connection_and_aggregated_once() {
+        let stats = Stats::new(2);
+        stats.frame_recv(0, 100);
+        stats.frame_recv(1, 200);
+        stats.frame_recv(1, 300);
+        assert_eq!(stats.received[0].bytes.load(Ordering::Relaxed), 100);
+        assert_eq!(stats.received[1].objects.load(Ordering::Relaxed), 2);
+        assert_eq!(stats.counters().bytes_recv, 600);
+        assert_eq!(stats.counters().frames_recv, 3);
+    }
 
     /// The connection gauge counts live sessions. A runner gates on `connections=N`
     /// before starting its window, so a session that already left must not hold the
