@@ -42,6 +42,8 @@ class LttngSession:
 
         await self._lttng("create", self.name, "--output", self.output)
         self.active = True
+        # Registration can flush mostly empty packets faster than the consumer
+        # drains them. More slots absorb those bursts at the same 64 MiB per CPU
         await self._lttng(
             "enable-channel",
             "--userspace",
@@ -49,9 +51,9 @@ class LttngSession:
             self.name,
             "--discard",
             "--subbuf-size",
-            "8M",
+            "1M",
             "--num-subbuf",
-            "8",
+            "64",
             "moq",
         )
 

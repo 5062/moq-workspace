@@ -49,8 +49,10 @@ def _peer(config: ExperimentConfig, placement: Placement, role: str, cpus: Seque
         "--client-version",
         config.protocol,
         "--client-tls-disable-verify",
+        # Spread subscriber handshakes before readiness and measurement
+        # The single publisher starts immediately, as does any single subscriber
         "--startup",
-        "0s",
+        "2s",
         "--report",
         "200ms",
         "--fps",

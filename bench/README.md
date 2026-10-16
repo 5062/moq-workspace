@@ -96,6 +96,10 @@ which copies files to and from the relay host. One connection per host serves
 every run of an invocation. A role without a table runs on the controller. The same
 tables go under `[hosts.relay]` and so on in a `run` configuration.
 
+Subscriber sessions start over a two-second ramp to avoid a burst of simultaneous
+handshakes. A single session starts immediately. The publisher starts only once
+all subscribers are connected, so the ramp precedes the measured workload.
+
 ```toml
 [relay]
 ssh = "me@relay-host"
