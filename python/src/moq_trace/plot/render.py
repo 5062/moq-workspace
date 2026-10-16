@@ -47,12 +47,28 @@ def _describe(metadata: RunMetadata, varied: str | None = None) -> str:
     return " | ".join(values)
 
 
+def _fanout_note(metadata: RunMetadata) -> str:
+    """Keep latency figures explicit about copies with no successful lifecycle.
+
+    The artifact retains all selected inbound objects and the recorded outcomes;
+    an absent copy remains absent rather than being assigned a drop outcome.
+    """
+
+    expected = metadata.counts.correlated_objects * metadata.workload.subscribers
+    successful = metadata.counts.copy_outcomes.get("success", 0)
+    if successful < expected:
+        return f"{successful:,}/{expected:,} copies successful; latencies use successful copies only"
+    return ""
+
+
 def _render_run(
     database: pathlib.Path,
     connection: duckdb.DuckDBPyConnection,
     metadata: RunMetadata,
 ) -> None:
     subtitle = _describe(metadata)
+    if note := _fanout_note(metadata):
+        subtitle += f"\n{note}"
     plots = database.parent / "plots"
     plot_latency_cdf(plots / "latency_cdf.png", subtitle, connection)
     runs = (PlotRun("", connection),)
@@ -94,6 +110,9 @@ def _render_comparison(
     else:
         subtitle = _describe(first, dimension)
         prefix, title = "comparison", f"Object latency by {dimension}"
+    for (_, label, _), summary in zip(rows, summaries, strict=True):
+        if note := _fanout_note(summary):
+            subtitle += f"\n{label}: {note}"
     plots = database.parent / "plots"
     plot_latency_comparison(plots / f"{prefix}_cdf.png", title, subtitle, runs, show_tail=dimension != "relay")
     plot_segments(plots / f"{prefix}_segments.png", f"Span segments by {dimension}", subtitle, runs)

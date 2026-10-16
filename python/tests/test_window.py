@@ -146,6 +146,17 @@ class WindowAndProcessTests(ModelCase):
         with self.assertRaisesRegex(TraceError, "copied to all 1 subscribers"):
             _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
 
+    def test_excess_fanout_is_still_rejected(self) -> None:
+        self.object_start(1, "rx", 1)
+        self.object_start(2, "tx", 2)
+        self.object_start(3, "rx", 1, frame=1)
+        self.object_start(4, "tx", 2, frame=1)
+        self.object_start(5, "tx", 3, frame=1)
+        self.prepare_model()
+
+        with self.assertRaisesRegex(TraceError, "1 steady-state objects have more than 1 outbound copies"):
+            _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
+
     def test_analysis_reads_only_the_analyzed_process(self) -> None:
         """A peer in the same trace reuses IDs and must stay out of the analysis."""
 

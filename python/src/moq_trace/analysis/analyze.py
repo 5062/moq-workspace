@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import pathlib
 import tempfile
@@ -35,9 +36,11 @@ from .artifact import write_metadata
 _QUINN_PHASES = ("routing", "scheduling")
 
 # Outcomes of a copy the relay or its peer deliberately did not deliver. Such a
-# copy still accounts for its subscriber: it carries no latency, but unlike a
-# failed or abandoned copy it is not a defect in the trace.
+# copy still accounts for its subscriber but carries no latency sample. Other
+# outcomes remain recorded as unsuccessful copies.
 _UNDELIVERED = ("expired", "dropped", "reset")
+
+_log = logging.getLogger(__name__)
 
 
 def _count(connection: duckdb.DuckDBPyConnection, query: str, parameters=()) -> int:
@@ -184,7 +187,8 @@ def _select_window(
     trims the tail.
 
     A copy accounts for its subscriber once it was delivered or deliberately not
-    delivered. Only the delivered ones carry latency samples.
+    delivered. A deficit after the window opens is reported as a warning. Only
+    the delivered copies carry latency samples.
     """
 
     connection.execute(sql.read("window/inbound-stage"), {"undelivered": list(_UNDELIVERED), "size": object_size})
@@ -204,13 +208,26 @@ def _select_window(
         raise TraceError("steady-state window contains no complete objects")
     bad = _count(
         connection,
-        "SELECT count(*) FROM inbound_objects WHERE start_ns BETWEEN ? AND ? AND copies <> ?",
+        "SELECT count(*) FROM inbound_objects WHERE start_ns BETWEEN ? AND ? AND copies > ?",
         [start, end, subscribers],
     )
     if bad:
         raise TraceError(
-            f"{bad} steady-state objects do not have exactly {subscribers} outbound copies "
+            f"{bad} steady-state objects have more than {subscribers} outbound copies "
             f"that were delivered or ended {', '.join(_UNDELIVERED)}"
+        )
+    incomplete = _count(
+        connection,
+        "SELECT count(*) FROM inbound_objects WHERE start_ns BETWEEN ? AND ? AND copies < ?",
+        [start, end, subscribers],
+    )
+    if incomplete:
+        _log.warning(
+            "%d steady-state objects have fewer than %d outbound copies that were delivered or ended %s; "
+            "continuing with successful-copy latency samples",
+            incomplete,
+            subscribers,
+            ", ".join(_UNDELIVERED),
         )
     connection.execute("INSERT INTO model.selected_objects SELECT trace_id FROM selected_rx")
     connection.execute(sql.read("window/copies"))

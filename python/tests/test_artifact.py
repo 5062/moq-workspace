@@ -69,6 +69,35 @@ def publish(trace, output, **workload):
 
 
 class ArtifactTests(unittest.TestCase):
+    def test_missing_fanout_is_published_and_visible_in_run_and_comparison_plots(self):
+        with fixture() as trace, tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            complete = root / "complete" / "analysis.duckdb"
+            publish(trace, complete)
+            # A whole object can be received without the relay starting any copy.
+            trace.object_start(5, "rx", 1, frame=1)
+            trace.packet(6, "rx", 1, frame=1)
+            incomplete = root / "incomplete" / "analysis.duckdb"
+            with self.assertLogs("moq_trace.analysis.analyze", level="WARNING") as logs:
+                publish(trace, incomplete)
+            self.assertIn("1 steady-state objects", logs.output[0])
+            with open_artifact(incomplete) as artifact:
+                self.assertEqual(artifact.metadata.counts.correlated_objects, 2)
+                self.assertEqual(artifact.metadata.counts.copy_outcomes, {"success": 1})
+                self.assertEqual(
+                    artifact.connection.execute(
+                        "SELECT count(*) FROM metrics.samples WHERE metric = 'full_span'"
+                    ).fetchone(),
+                    (1,),
+                )
+            with mock.patch("moq_trace.plot.render.plot_latency_cdf") as plot:
+                render(incomplete)
+                self.assertIn("1/2 copies successful", plot.call_args.args[1])
+            comparison = snapshot_bench(root, {"complete": complete, "incomplete": incomplete})
+            with mock.patch("moq_trace.plot.render.plot_latency_comparison") as plot:
+                render(comparison)
+                self.assertIn("incomplete: 1/2 copies successful", plot.call_args.args[2])
+
     def test_same_pid_in_distinct_captures_is_ambiguous(self):
         with fixture() as trace, duckdb.connect(":memory:") as connection:
 

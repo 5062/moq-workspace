@@ -50,6 +50,13 @@ Use `just bench` or `just run CONFIG` for workload capture. `moq-trace analyze`,
 `moq-trace verify`, and `moq-trace plot` are workspace commands for inspecting
 local development and testing artifacts.
 
+After the steady-state window opens, incomplete fanout produces a warning rather
+than failing analysis. The artifact keeps every selected inbound object and the
+outcomes of its recorded copies; an absent copy is not labeled as dropped.
+Latency statistics use successful copies only. Run and comparison figures show
+the successful copy count against the expected fanout when it is incomplete.
+Excess fanout and invalid trace boundaries still fail validation.
+
 ### Figures
 
 `moq-trace plot` renders figures from an existing artifact, for example after changing the plotting code:
