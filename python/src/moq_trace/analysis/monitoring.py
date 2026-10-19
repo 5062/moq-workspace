@@ -51,6 +51,7 @@ def ingest(
                 )
             if host.resources is not None:
                 previous = {}
+                previous_threads = {}
                 with (path.parent / host.resources).open() as stream:
                     for line in stream:
                         row = ResourceSample.model_validate_json(line)
@@ -67,6 +68,32 @@ def ingest(
                             ):
                                 raise ValueError("resource time/counters are not monotonic")
                         previous[row.role] = row
+                        tids = [thread.tid for thread in row.threads]
+                        if len(set(tids)) != len(tids) or row.pid not in tids:
+                            raise ValueError("resource sample threads are duplicated or omit the main thread")
+                        for thread in row.threads:
+                            key = (row.role, thread.tid, thread.start_ticks)
+                            before = previous_threads.get(key)
+                            if before is not None and (
+                                thread.user_ticks < before.user_ticks or thread.system_ticks < before.system_ticks
+                            ):
+                                raise ValueError("thread counters are not monotonic")
+                            previous_threads[key] = thread
+                            connection.execute(
+                                "INSERT INTO monitoring.threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                [
+                                    host.host,
+                                    row.role,
+                                    row.pid,
+                                    thread.tid,
+                                    thread.start_ticks,
+                                    thread.name,
+                                    row.monotonic_ns - host.offset_ns - origin_ns,
+                                    row.clock_ticks,
+                                    thread.user_ticks,
+                                    thread.system_ticks,
+                                ],
+                            )
                         connection.execute(
                             "INSERT INTO monitoring.resources VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             [
@@ -132,7 +159,14 @@ def _records(connection: duckdb.DuckDBPyConnection, table: str) -> list[dict]:
 def materialize(connection: duckdb.DuckDBPyConnection) -> None:
     """Publish concrete tables, keeping artifacts independent of query definitions."""
 
-    for name in ("resource_summary", "delivery_summary", "resource_intervals", "delivery_intervals"):
+    for name in (
+        "resource_summary",
+        "thread_summary",
+        "delivery_summary",
+        "resource_intervals",
+        "thread_intervals",
+        "delivery_intervals",
+    ):
         connection.execute(f"CREATE TABLE monitoring.{name}_materialized AS SELECT * FROM monitoring.{name}")
         connection.execute(f"DROP VIEW monitoring.{name}")
         connection.execute(f"ALTER TABLE monitoring.{name}_materialized RENAME TO {name}")
@@ -159,10 +193,11 @@ def _write_summary(connection: duckdb.DuckDBPyConnection, path: pathlib.Path, ma
     deliveries = _records(connection, "monitoring.delivery_summary")
     start_ns, end_ns = connection.execute("SELECT start_ns, end_ns FROM monitoring.window").fetchone()
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "window_seconds": (end_ns - start_ns) / 1e9,
         "hosts": [host.model_dump() for host in manifest.hosts],
         "resources": _records(connection, "monitoring.resource_summary"),
+        "threads": _records(connection, "monitoring.thread_summary"),
         "deliveries": deliveries,
         "total_goodput_bytes_per_second": (sum(row["bytes_per_second"] for row in deliveries) if deliveries else None),
         "total_objects_per_second": sum(row["objects_per_second"] for row in deliveries) if deliveries else None,

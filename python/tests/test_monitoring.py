@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import tempfile
+import threading
 import unittest
 
 import duckdb
@@ -10,8 +12,9 @@ import duckdb
 from moq_trace.analysis import monitoring, sql
 from moq_trace.analysis.network import capture_statistics
 from moq_trace.errors import TraceError
-from moq_trace.manifest import MonitoringHost, MonitoringManifest
+from moq_trace.manifest import MonitoringHost, MonitoringManifest, ResourceSample
 from moq_trace.plot.monitoring import plot_monitoring
+from moq_trace.run import resources
 
 
 class MonitoringTests(unittest.TestCase):
@@ -43,7 +46,7 @@ class MonitoringTests(unittest.TestCase):
         self.path.write_text(manifest.model_dump_json())
         self.samples = [
             dict(
-                schema_version=1,
+                schema_version=2,
                 role="relay",
                 pid=10,
                 start_ticks=123,
@@ -52,6 +55,16 @@ class MonitoringTests(unittest.TestCase):
                 user_ticks=second * 100,
                 system_ticks=second * 50,
                 rss_bytes=second * 1024,
+                threads=[
+                    dict(tid=10, name="relay", start_ticks=123, user_ticks=second * 60, system_ticks=0),
+                    dict(tid=11, name="worker", start_ticks=124, user_ticks=second * 40, system_ticks=second * 50),
+                    # Starts after the first samples, so it has fewer intervals.
+                    *(
+                        [dict(tid=12, name="late", start_ticks=300, user_ticks=second * 10, system_ticks=0)]
+                        if second >= 3
+                        else []
+                    ),
+                ],
             )
             for second in (0, 1, 3, 5, 6)
         ]
@@ -82,6 +95,15 @@ class MonitoringTests(unittest.TestCase):
             "sampled_max_rss_bytes, rss_growth_bytes FROM monitoring.resource_summary"
         ).fetchone()
         self.assertEqual(row, (4.0, 4.0, 2.0, 1.5, 5120, 4096))
+        row = self.db.execute(
+            "SELECT sampled_threads, busiest_thread_mean_cpu_cores, busiest_thread_max_cpu_cores "
+            "FROM monitoring.resource_summary"
+        ).fetchone()
+        self.assertEqual(row, (3, 0.9, 0.9))
+        rows = self.db.execute(
+            "SELECT tid, name, covered_seconds, mean_cpu_cores FROM monitoring.thread_summary ORDER BY tid"
+        ).fetchall()
+        self.assertEqual(rows, [(10, "relay", 4.0, 0.6), (11, "worker", 4.0, 0.9), (12, "late", 2.0, 0.1)])
         rows = self.db.execute(
             "SELECT connection, covered_seconds, bytes, objects, bytes_per_second "
             "FROM monitoring.delivery_summary ORDER BY connection"
@@ -102,15 +124,43 @@ class MonitoringTests(unittest.TestCase):
                 with self.assertRaisesRegex(TraceError, "identity|monotonic"):
                     self._ingest()
                 self.samples[2][field] = old
-                for table in ("window", "hosts", "resources", "deliveries"):
+                for table in ("window", "hosts", "resources", "threads", "deliveries"):
                     self.db.execute(f"DELETE FROM monitoring.{table}")
+
+    def test_thread_counter_reset_duplicate_and_missing_main_thread_are_rejected(self):
+        cases = (
+            (lambda threads: threads[1].update(user_ticks=0), "thread counters"),
+            (lambda threads: threads.append(dict(threads[1])), "duplicated"),
+            (lambda threads: threads.pop(0), "main thread"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                old = [dict(thread) for thread in self.samples[2]["threads"]]
+                change(self.samples[2]["threads"])
+                with self.assertRaisesRegex(TraceError, message):
+                    self._ingest()
+                self.samples[2]["threads"] = old
+                for table in ("window", "hosts", "resources", "threads", "deliveries"):
+                    self.db.execute(f"DELETE FROM monitoring.{table}")
+
+    def test_collector_reads_its_own_threads(self):
+        stopped = threading.Event()
+        worker = threading.Thread(target=stopped.wait, name="moq-test-worker")
+        worker.start()
+        try:
+            row = ResourceSample.model_validate_json(json.dumps(resources.sample("relay", os.getpid())))
+        finally:
+            stopped.set()
+            worker.join()
+        self.assertIn(os.getpid(), [thread.tid for thread in row.threads])
+        self.assertIn("moq-test-worker"[:15], [thread.name for thread in row.threads])
 
     def test_unknown_schema_fields_and_missing_connection_are_rejected(self):
         self.samples[0]["unknown"] = 1
         with self.assertRaisesRegex(TraceError, "Extra inputs"):
             self._ingest()
         self.samples[0].pop("unknown")
-        for table in ("window", "hosts", "resources", "deliveries"):
+        for table in ("window", "hosts", "resources", "threads", "deliveries"):
             self.db.execute(f"DELETE FROM monitoring.{table}")
         self.deliveries = [row for row in self.deliveries if row["connection"] == 0]
         with self.assertRaisesRegex(TraceError, "missing delivered"):

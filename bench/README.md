@@ -168,7 +168,10 @@ subscriber processes, including on SSH hosts. One persistent stdlib Python
 collector runs on each measured host; sampling requires no sudo. Set
 `--monitor-interval-seconds 0.5` to change the cadence. CPU is reported in cores
 (1 core = 100%; a multithreaded relay may exceed it), with user/system CPU seconds,
-mean and sampled maximum RSS, and RSS growth. These are whole-process measurements;
+mean and sampled maximum RSS, and RSS growth. Each sample also records every live
+thread's CPU counters from `/proc/<pid>/task`, so the summary names the busiest
+thread and shows whether one thread is saturated while the process total looks
+low. Apart from that per-thread split, these are whole-process measurements;
 the trace's elapsed phases are not CPU time or per-object CPU attribution.
 
 The reference peers also record cumulative received payload bytes and completed

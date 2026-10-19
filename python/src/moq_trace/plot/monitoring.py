@@ -32,6 +32,14 @@ def plot_monitoring(path: pathlib.Path, subtitle: str, connection: duckdb.DuckDB
             [host, role, round(start * 1e9), round(end * 1e9)],
         ).fetchall()
         _intervals(cpu, rows, 2, label)
+        # Threads of one process share sample instants, so each interval's
+        # busiest thread is comparable with the process total above it.
+        rows = connection.execute(
+            "SELECT min(start_ns) / 1e9, end_ns / 1e9, max(cpu_cores) FROM monitoring.thread_intervals "
+            "WHERE host = ? AND role = ? AND start_ns >= ? AND end_ns <= ? GROUP BY end_ns ORDER BY end_ns",
+            [host, role, round(start * 1e9), round(end * 1e9)],
+        ).fetchall()
+        _intervals(cpu, rows, 2, f"{role} busiest thread")
         rows = connection.execute(
             "SELECT elapsed_ns / 1e9, rss_bytes / 1048576.0 FROM monitoring.resources "
             "WHERE host = ? AND role = ? AND elapsed_ns BETWEEN ? AND ? ORDER BY elapsed_ns",
@@ -69,7 +77,7 @@ def plot_monitoring(path: pathlib.Path, subtitle: str, connection: duckdb.DuckDB
     for axis, title, unit in zip(
         axes,
         (
-            "Process CPU (1 core = 100%)",
+            "Process CPU and its busiest thread (1 core = 100%)",
             "Resident memory (approximate, sampled)",
             "Delivered application payload goodput",
             "Completed objects at subscribers",
@@ -91,10 +99,11 @@ def plot_monitoring(path: pathlib.Path, subtitle: str, connection: duckdb.DuckDB
 
 
 def plot_monitoring_comparison(path: pathlib.Path, subtitle: str, runs: list[PlotRun]) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     for index, run in enumerate(runs):
         row = run.connection.execute(
-            "SELECT mean_cpu_cores, sampled_max_rss_bytes / 1048576.0 FROM monitoring.resource_summary "
+            "SELECT mean_cpu_cores, busiest_thread_mean_cpu_cores, sampled_max_rss_bytes / 1048576.0 "
+            "FROM monitoring.resource_summary "
             "WHERE run_id = ? AND role = 'relay'",
             [run.run_id],
         ).fetchone()
@@ -102,14 +111,19 @@ def plot_monitoring_comparison(path: pathlib.Path, subtitle: str, runs: list[Plo
             "SELECT sum(bytes_per_second) * 8 / 1e6 FROM monitoring.delivery_summary WHERE run_id = ?",
             [run.run_id],
         ).fetchone()[0]
-        for axis, value in zip(axes, (*row, rate) if row is not None else (None, None, rate), strict=True):
+        for axis, value in zip(axes, (*row, rate) if row is not None else (None, None, None, rate), strict=True):
             if value is not None:
                 axis.bar(index, value, color=f"C{index % 10}")
             else:
                 axis.text(index, 0, "unavailable", rotation=90, ha="center", va="bottom", color="gray", fontsize=8)
     for axis, title in zip(
         axes,
-        ("Mean relay CPU (cores)", "Sampled maximum relay RSS (MiB)", "Total delivered payload (Mbit/s)"),
+        (
+            "Mean relay CPU (cores)",
+            "Busiest relay thread (cores)",
+            "Sampled maximum relay RSS (MiB)",
+            "Total delivered payload (Mbit/s)",
+        ),
         strict=True,
     ):
         axis.set_title(title)

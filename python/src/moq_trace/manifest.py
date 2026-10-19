@@ -49,11 +49,22 @@ class MonitoringManifest(BaseModel):
     goodput: bool
 
 
+class ThreadSample(BaseModel):
+    """Raw procfs counters of one thread. TID plus start ticks identifies one thread lifetime."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    tid: int = Field(gt=0)
+    name: str
+    start_ticks: int = Field(ge=0)
+    user_ticks: int = Field(ge=0)
+    system_ticks: int = Field(ge=0)
+
+
 class ResourceSample(BaseModel):
     """Raw procfs counters. PID plus start ticks identifies one process lifetime."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     role: Literal["relay", "publisher", "subscriber"]
     pid: int = Field(gt=0)
     start_ticks: int = Field(ge=0)
@@ -62,6 +73,8 @@ class ResourceSample(BaseModel):
     user_ticks: int = Field(ge=0)
     system_ticks: int = Field(ge=0)
     rss_bytes: int = Field(ge=0)
+    # Threads alive at the sample; exited threads' CPU stays in the process counters.
+    threads: tuple[ThreadSample, ...] = Field(min_length=1)
 
 
 class DeliverySample(BaseModel):
