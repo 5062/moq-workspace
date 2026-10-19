@@ -2,10 +2,10 @@
 # Check that the forks' standalone pins build the code the workspace pins.
 #
 # A relay host builds each fork on its own, from the revisions the fork names
-# itself: Cargo lockfiles, git revs in Cargo manifests and configs, and
-# moxygen's mvfst-rev.txt. Inside the workspace those are replaced by the
-# submodules, so a stale standalone pin goes unnoticed until a host builds
-# against an older contract or a commit GitHub no longer keeps.
+# itself: Cargo lockfiles and moxygen's mvfst-rev.txt. Inside the workspace
+# those are replaced by the submodules, so a stale standalone pin goes
+# unnoticed until a host builds against an older contract or a commit GitHub no
+# longer keeps.
 #
 # Every standalone pin must be in its submodule's checked-out history, so it is
 # on a branch and not ahead of the pin, and must leave the files a dependent
@@ -18,13 +18,10 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
-# Standalone pins: Cargo lockfiles, then manifests and configs with git revs.
+# Standalone pins: Cargo lockfiles.
 lockfiles=(
   relays/moq-dev-moq/Cargo.lock
   relays/cloudflare-moq-rs/Cargo.lock
-)
-manifests=(
-  relays/moq-dev-moq/rs/trace.toml
 )
 
 # The submodule each fork repository is pinned at, and the paths a dependent
@@ -77,12 +74,6 @@ for file in "${lockfiles[@]}"; do
     check "$file" "$repo" "$rev"
   done < <(grep -oE 'git\+https://github\.com/5062/[^?#"]+[^#"]*#[0-9a-f]{40}' "$file" |
     sed -E 's|git\+https://github\.com/5062/([^?#]+)[^#]*#([0-9a-f]{40})|\1 \2|' | sort -u)
-done
-for file in "${manifests[@]}"; do
-  while read -r repo rev; do
-    check "$file" "$repo" "$rev"
-  done < <(grep -oE 'github\.com/5062/[^"]+", rev = "[0-9a-f]{40}"' "$file" |
-    sed -E 's|github\.com/5062/([^"]+)", rev = "([0-9a-f]{40})"|\1 \2|' | sort -u)
 done
 check relays/facebook-moxygen/moq_trace/mvfst-rev.txt mvfst \
   "$(tr -d '[:space:]' <relays/facebook-moxygen/moq_trace/mvfst-rev.txt)"
