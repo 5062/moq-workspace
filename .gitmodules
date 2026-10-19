@@ -2,19 +2,10 @@
 	path = moq-trace
 	url = https://github.com/5062/moq-trace.git
 	branch = main
-[submodule "relays/moq-dev-moq"]
-	path = relays/moq-dev-moq
-	url = https://github.com/5062/moq.git
+[submodule "deps/mvfst"]
+	path = deps/mvfst
+	url = https://github.com/5062/mvfst.git
 	branch = moq-trace
-[submodule "relays/cloudflare-moq-rs"]
-	path = relays/cloudflare-moq-rs
-	url = https://github.com/5062/moq-rs.git
-	branch = moq-trace
-[submodule "relays/google-quiche"]
-	path = relays/google-quiche
-	url = https://github.com/5062/quiche.git
-	branch = moq-trace
-	shallow = true
 [submodule "deps/quinn"]
 	path = deps/quinn
 	url = https://github.com/5062/quinn.git
@@ -23,11 +14,20 @@
 	path = deps/web-transport
 	url = https://github.com/5062/web-transport.git
 	branch = moq-trace/web-transport-quinn-v0.11.11
+[submodule "relays/cloudflare-moq-rs"]
+	path = relays/cloudflare-moq-rs
+	url = https://github.com/5062/moq-rs.git
+	branch = moq-trace
 [submodule "relays/facebook-moxygen"]
 	path = relays/facebook-moxygen
 	url = https://github.com/5062/moxygen.git
 	branch = moq-trace
-[submodule "deps/mvfst"]
-	path = deps/mvfst
-	url = https://github.com/5062/mvfst.git
+[submodule "relays/google-quiche"]
+	path = relays/google-quiche
+	url = https://github.com/5062/quiche.git
+	branch = moq-trace
+	shallow = true
+[submodule "relays/moq-dev-moq"]
+	path = relays/moq-dev-moq
+	url = https://github.com/5062/moq.git
 	branch = moq-trace
