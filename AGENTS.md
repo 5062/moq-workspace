@@ -12,10 +12,14 @@ capture helpers, verification, and the Rust CTF reader in `python/native/`.
 placement, checkout synchronization, and capture orchestration.
 
 Keep imports flowing from `decode` to `analysis` to `plot` to `run`; lower layers
-never import higher ones. Root modules `errors`, `manifest`, and `metadata` are
-shared contracts and import none of those layers. The bench runner may consume
-all layers. Re-analyzing an existing capture requires no SSH or live hosts.
-`python/tests/test_layering.py` enforces the direction.
+never import higher ones. `capture` holds host, process, LTTng, and resource
+collection primitives, imports no other layer, and is used by `run` and the
+bench runner; `capture/resources.py` runs on remote hosts and imports only the
+standard library. Root modules `errors`, `labels`, `manifest`, and `metadata`
+are shared contracts and import none of those layers. The bench runner may
+consume all layers; `moq_trace` never imports it. Re-analyzing an existing
+capture requires no SSH or live hosts. `python/tests/test_layering.py` enforces
+the direction.
 
 Correlate providers by process, direction, connection ID, stream ID, and half-open
 byte ranges. IDs are process-local; one recording may contain several processes.

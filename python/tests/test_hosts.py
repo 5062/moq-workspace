@@ -7,8 +7,8 @@ import tempfile
 import time
 import unittest
 
+from moq_trace.capture import hosts, local
 from moq_trace.errors import CaptureError
-from moq_trace.run import hosts, local
 
 
 def peer(*lines: str, exit_status: int | None = None) -> tuple[str, ...]:

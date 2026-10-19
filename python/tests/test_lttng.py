@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
+from moq_trace.capture import hosts, local, lttng
 from moq_trace.errors import CaptureError
-from moq_trace.run import hosts, local, lttng
 
 
 class _LttngHost(local.LocalHost):

@@ -11,10 +11,10 @@ import duckdb
 
 from moq_trace.analysis import monitoring, sql
 from moq_trace.analysis.network import capture_statistics
+from moq_trace.capture import resources
 from moq_trace.errors import TraceError
 from moq_trace.manifest import MonitoringHost, MonitoringManifest, ResourceSample
 from moq_trace.plot.monitoring import plot_monitoring
-from moq_trace.run import resources
 
 
 class MonitoringTests(unittest.TestCase):

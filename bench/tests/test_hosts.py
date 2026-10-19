@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from moq_trace.capture import hosts, local
 from moq_trace.errors import CaptureError
-from moq_trace.run import hosts, local
 from run_support import peer
 
 from moq_workspace_bench import experiment, ssh

@@ -3,8 +3,8 @@ from __future__ import annotations
 import pathlib
 import shlex
 
+from moq_trace.capture import hosts, local
 from moq_trace.metadata import CommandSet, Counts, Processes, RunMetadata, TransportCapabilities, Window, Workload
-from moq_trace.run import hosts, local
 
 from moq_workspace_bench import placement, ssh
 from moq_workspace_bench.config import ExperimentConfig, HostConfig

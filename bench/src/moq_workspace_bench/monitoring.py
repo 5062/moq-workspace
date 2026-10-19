@@ -8,8 +8,8 @@ import shlex
 import time
 from importlib.resources import files
 
+from moq_trace.capture.hosts import Host, Process
 from moq_trace.manifest import MONITORING_MANIFEST, MonitoringHost, MonitoringManifest
-from moq_trace.run.hosts import Host, Process
 
 from .config import ExperimentConfig
 from .placement import Placement
@@ -39,7 +39,7 @@ class Monitoring:
             groups.setdefault(self.placement.host(role), {})[role] = process.pid
         clocks = {host: await _clock(host) for host in groups}
         _, relay_offset, relay_error = clocks[self.placement.relay]
-        source = files("moq_trace.run").joinpath("resources.py").read_text()
+        source = files("moq_trace.capture").joinpath("resources.py").read_text()
         for index, (host, roles) in enumerate(groups.items()):
             measured = {role: pid for role, pid in roles.items() if role == "relay" or self.config.monitor_peers}
             path = None

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from moq_trace.capture.hosts import Host
 from moq_trace.errors import CaptureError
 from moq_trace.metadata import CommandSet
-from moq_trace.run.hosts import Host
 
 from . import tls
 from .config import ExperimentConfig

@@ -9,9 +9,9 @@ import shlex
 import time
 import uuid
 
+from moq_trace.capture.hosts import Host
+from moq_trace.capture.local import LocalHost
 from moq_trace.errors import CaptureError
-from moq_trace.run.hosts import Host
-from moq_trace.run.local import LocalHost
 
 from .config import ExperimentConfig, HostConfig, Sync
 from .ssh import RemoteHost, SshPool

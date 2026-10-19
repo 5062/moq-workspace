@@ -10,9 +10,9 @@ from collections.abc import Callable, Sequence
 
 from moq_trace.analysis.analyze import run as analyze
 from moq_trace.analysis.artifact import open_artifact
+from moq_trace.capture.hosts import Process
 from moq_trace.metadata import Binaries, CommandSet, Window, Workload
 from moq_trace.plot.render import render
-from moq_trace.run.hosts import Process
 
 from . import tls
 from .capture import Capture, CaptureSession

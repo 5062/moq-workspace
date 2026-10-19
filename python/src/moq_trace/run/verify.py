@@ -7,9 +7,9 @@ import os
 import pathlib
 from collections.abc import Sequence
 
+from ..capture.local import LocalHost
+from ..capture.lttng import LttngSession
 from ..errors import CaptureError
-from .local import LocalHost
-from .lttng import LttngSession
 
 
 async def record(output: pathlib.Path, commands: Sequence[Sequence[str]]) -> pathlib.Path:

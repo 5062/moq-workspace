@@ -11,9 +11,9 @@ import shlex
 from collections.abc import Sequence
 
 from moq_trace.analysis.network import capture_statistics
+from moq_trace.capture.hosts import Clock, Host, Process
+from moq_trace.capture.lttng import LttngSession
 from moq_trace.manifest import MANIFEST, QLOG_ENVIRONMENT, NetworkManifest
-from moq_trace.run.hosts import Clock, Host, Process
-from moq_trace.run.lttng import LttngSession
 
 from . import tls
 from .config import ExperimentConfig

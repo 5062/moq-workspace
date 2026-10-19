@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 import pathlib
 
+from moq_trace.capture.hosts import Host, Process
 from moq_trace.errors import CaptureError
-from moq_trace.run.hosts import Host, Process
 
 # Environment variable holding the sudo password for the packet capture, for
 # hosts where sudo asks for one.
