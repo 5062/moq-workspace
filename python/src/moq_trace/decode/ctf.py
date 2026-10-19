@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Collection, Iterable, Iterator
+from collections.abc import Collection, Iterator
 
 import pyarrow as pa
 
@@ -150,25 +150,5 @@ def batches(
         yield from _native_ctf.Reader(
             paths, list(SCHEMAS.items()), None if expected_pids is None else list(expected_pids), batch_size
         )
-    except _native_ctf.DecodeError as error:
-        raise CtfError(str(error)) from error
-
-
-def _batches(
-    messages: Iterable,
-    expected_pids: Collection[int] | None,
-    batch_size: int,
-) -> Iterator[tuple[str, pa.RecordBatch]]:
-    """Exercise the native decoder with real Babeltrace message wrappers in tests."""
-
-    from .. import _native_ctf
-
-    try:
-        decoder = _native_ctf.MessageDecoder(
-            list(SCHEMAS.items()), None if expected_pids is None else list(expected_pids), batch_size
-        )
-        for message in messages:
-            yield from decoder.push(message)
-        yield from decoder.finish()
     except _native_ctf.DecodeError as error:
         raise CtfError(str(error)) from error

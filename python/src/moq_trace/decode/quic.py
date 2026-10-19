@@ -97,7 +97,8 @@ class Keys:
         # key (RFC 9001 section 6).
         self.hp = expand_label(secret, "quic hp", suite.key_length, suite.hash) if hp is None else hp
         self._aead = ChaCha20Poly1305(self.key) if suite.chacha else AESGCM(self.key)
-        self._hp_cipher = None if suite.chacha else Cipher(algorithms.AES(self.hp), modes.ECB())
+        # ECB keeps no state between blocks, so one encryptor serves every packet.
+        self._hp_encryptor = None if suite.chacha else Cipher(algorithms.AES(self.hp), modes.ECB()).encryptor()
 
     def mask(self, sample: bytes) -> bytes:
         """Return the five header protection mask bytes for a 16-byte sample."""
@@ -107,7 +108,7 @@ class Keys:
             # nonce, which is the 16-byte nonce `cryptography` takes.
             encryptor = Cipher(algorithms.ChaCha20(self.hp, sample), mode=None).encryptor()
             return encryptor.update(b"\x00" * 5)
-        return self._hp_cipher.encryptor().update(sample)[:5]
+        return self._hp_encryptor.update(sample)[:5]
 
     def nonce(self, packet_number: int) -> bytes:
         """Return the AEAD nonce of a packet number."""

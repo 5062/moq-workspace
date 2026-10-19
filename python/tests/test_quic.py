@@ -392,6 +392,26 @@ class DecryptorTests(unittest.TestCase):
         self.assertEqual(packet.connection, 1)
         self.assertEqual(len(self.decryptor.connections), 2)
 
+    def test_a_retry_rekeys_the_initial_space(self) -> None:
+        peer = _Peer(seed=3, client_cid=b"eeeeeeee", server_cid=b"uuuuuuuu")
+        decryptor = quic.Decryptor(peer.key_log())
+        hello = _crypto(0, peer.client_hello()) + b"\x00" * 1000
+        _decrypt(decryptor, [(True, peer.long(quic.CLIENT, "initial", 0, hello))])
+        # Retry: long header type 3, the client's ID as DCID, a new server ID, a token, and an integrity tag.
+        retry_cid = b"rrrrrrrr"
+        retry = bytes([0xF0]) + quic.VERSION_1.to_bytes(4, "big")
+        retry += bytes([len(peer.client_cid)]) + peer.client_cid + bytes([len(retry_cid)]) + retry_cid
+        retry += b"token" + b"\x00" * 16
+        self.assertEqual(decryptor.datagram(1, LOCAL, PEER, False, retry), [])
+        # The client resends its Initial to the Retry's ID, keyed from it, and the server answers under those keys.
+        peer.dcid, peer.initial = retry_cid, quic.initial_keys(retry_cid)
+        packets = _decrypt(decryptor, peer.handshake_datagrams(), 2)
+        self.assertEqual(
+            [(packet.connection, packet.sender, packet.space) for packet in packets[:2]],
+            [(0, quic.CLIENT, quic.INITIAL), (0, quic.SERVER, quic.INITIAL)],
+        )
+        self.assertEqual(len(decryptor.connections), 1)
+
     def test_a_client_hello_split_across_initial_packets(self) -> None:
         peer = _Peer(seed=3)
         hello = peer.client_hello()

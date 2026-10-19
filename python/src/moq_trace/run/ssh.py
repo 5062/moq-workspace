@@ -41,12 +41,13 @@ class SshPool:
 
     def __init__(self) -> None:
         self._connections: dict[str, asyncssh.SSHClientConnection] = {}
-        self._lock = asyncio.Lock()
+        # Per destination, so one slow login does not hold up the others.
+        self._locks: dict[str, asyncio.Lock] = {}
 
     async def get(self, destination: str) -> asyncssh.SSHClientConnection:
         """Return the open connection to `destination`, a `[user@]host`, connecting on first use."""
 
-        async with self._lock:
+        async with self._locks.setdefault(destination, asyncio.Lock()):
             connection = self._connections.get(destination)
             if connection is None or connection.is_closed():
                 user, _, host = destination.rpartition("@")

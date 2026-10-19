@@ -67,6 +67,19 @@ _BENCH_SETTINGS = (
 )
 
 
+# `bench` on/off switches that map onto `ExperimentConfig` fields; unset keeps the field's default.
+_BENCH_SWITCHES = {
+    "monitor_resources": "Sample relay CPU and RSS (default: on).",
+    "monitor_peers": "Also sample publisher and subscriber CPU/RSS (default: off).",
+    "monitor_goodput": "Record delivered payload counters per subscriber connection (default: on).",
+    "capture_packets": "Record a full tcpdump of the relay's port for wire analysis; "
+    "needs passwordless sudo (default: off).",
+    "qlog": "Ask the relay for qlog through QLOGDIR, for RTT, loss, and congestion window. "
+    "Costs relay CPU, so latency is best measured without it (default: off).",
+    "render": "Render figures for each traced run (default: on).",
+}
+
+
 def _add_setting(parser: argparse.ArgumentParser, name: str) -> None:
     field = ExperimentConfig.model_fields[name]
     kind = next(kind for kind in typing.get_args(field.annotation) or (field.annotation,) if kind is not type(None))
@@ -120,11 +133,7 @@ def parser() -> argparse.ArgumentParser:
     )
     for name in _BENCH_SETTINGS:
         _add_setting(bench, name)
-    for name, help in (
-        ("monitor_resources", "Sample relay CPU and RSS (default: on)."),
-        ("monitor_peers", "Also sample publisher and subscriber CPU/RSS (default: off)."),
-        ("monitor_goodput", "Record delivered payload counters per subscriber connection (default: on)."),
-    ):
+    for name, help in _BENCH_SWITCHES.items():
         bench.add_argument(f"--{name.replace('_', '-')}", action=argparse.BooleanOptionalAction, help=help)
     bench.add_argument(
         "--sweep",
@@ -138,22 +147,6 @@ def parser() -> argparse.ArgumentParser:
         type=pathlib.Path,
         metavar="TOML",
         help="Place the relay, publisher, and subscriber on ssh hosts; see README (default: all local).",
-    )
-    bench.add_argument(
-        "--capture-packets",
-        action=argparse.BooleanOptionalAction,
-        help="Record a full tcpdump of the relay's port for wire analysis; needs passwordless sudo (default: off).",
-    )
-    bench.add_argument(
-        "--qlog",
-        action=argparse.BooleanOptionalAction,
-        help="Ask the relay for qlog through QLOGDIR, for RTT, loss, and congestion window. "
-        "Costs relay CPU, so latency is best measured without it (default: off).",
-    )
-    bench.add_argument(
-        "--render",
-        action=argparse.BooleanOptionalAction,
-        help="Render figures for each traced run (default: on).",
     )
 
     analyze = commands.add_parser("analyze", help="Analyze one LTTng CTF trace.")
@@ -318,15 +311,7 @@ def _run(args: argparse.Namespace) -> None:
         from .bench import bench, default_output
         from .suite import load
 
-        names = [
-            *_BENCH_SETTINGS,
-            "capture_packets",
-            "qlog",
-            "render",
-            "monitor_resources",
-            "monitor_peers",
-            "monitor_goodput",
-        ]
+        names = [*_BENCH_SETTINGS, *_BENCH_SWITCHES]
         settings = {name: getattr(args, name) for name in names if getattr(args, name) is not None}
         if args.sweep is not None and args.sweep.dimension in settings:
             flag = args.sweep.dimension.replace("_", "-")

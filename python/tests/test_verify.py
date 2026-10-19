@@ -7,7 +7,6 @@ import trace_source
 from trace_source import Enum, Event
 
 from moq_trace.analysis import verify
-from moq_trace.decode import ctf
 
 
 def packet(direction: str, trace_id: int, start: int, end: int, outcome: str = "success") -> list[Event]:
@@ -114,7 +113,7 @@ class VerifyTests(unittest.TestCase):
     """Check decoded captures, so the checks read what the decoder produces."""
 
     def check(self, items: list[Event], **requirements) -> verify.Summary:
-        rows = verify.rows(ctf._batches(trace_source.messages(items), None, 65_536))
+        rows = verify.rows(trace_source.decode(trace_source.messages(items), None, 65_536))
         return verify.check(rows, verify.Requirements(**requirements))
 
     def valid(self) -> list[Event]:

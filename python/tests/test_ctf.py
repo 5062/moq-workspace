@@ -33,7 +33,7 @@ class CtfDecodeTests(unittest.TestCase):
 
     def decode(self, items, expected_pids=None, batch_size=65_536) -> dict[str, list[dict]]:
         rows: dict[str, list[dict]] = {}
-        for name, batch in ctf._batches(trace_source.messages(items), expected_pids, batch_size):
+        for name, batch in trace_source.decode(trace_source.messages(items), expected_pids, batch_size):
             self.assertEqual(batch.schema, ctf.SCHEMAS[name])
             rows.setdefault(name, []).extend(batch.to_pylist())
         return rows
@@ -60,14 +60,15 @@ class CtfDecodeTests(unittest.TestCase):
     def test_clock_is_read_without_the_unix_epoch_offset(self) -> None:
         """The recorded instant shares the monotonic epoch of the payload timestamp."""
 
-        rows = ctf._batches(trace_source.messages([socket_start()], Clock(offset_seconds=1_700_000_000)), None, 10)
+        messages = trace_source.messages([socket_start()], Clock(offset_seconds=1_700_000_000))
+        rows = trace_source.decode(messages, None, 10)
         (_, batch), *_ = rows
         self.assertEqual(batch.column("ctf_timestamp_ns").to_pylist(), [7])
 
     def test_rejects_a_clock_other_than_lttng_monotonic(self) -> None:
         for clock in (Clock(name="realtime"), Clock(frequency=1_000_000)):
             with self.subTest(clock=clock), self.assertRaisesRegex(ctf.CtfError, "analyzer reads only"):
-                list(ctf._batches(trace_source.messages([socket_start()], clock), None, 10))
+                list(trace_source.decode(trace_source.messages([socket_start()], clock), None, 10))
 
     def test_rejects_an_event_recorded_before_its_timestamp(self) -> None:
         with self.assertRaisesRegex(ctf.CtfError, "udp_socket_start from VPID 42 was recorded at 7 ns, before"):
@@ -155,7 +156,7 @@ class CtfDecodeTests(unittest.TestCase):
 
     def test_bounds_batches_and_keeps_event_order(self) -> None:
         events = [socket_start(trace_id, timestamp=10 + trace_id) for trace_id in range(5)]
-        batches = list(ctf._batches(trace_source.messages(events), None, 2))
+        batches = list(trace_source.decode(trace_source.messages(events), None, 2))
         self.assertEqual([batch.num_rows for _, batch in batches], [2, 2, 1])
         self.assertEqual(
             [trace_id for _, batch in batches for trace_id in batch.column("trace_id").to_pylist()],
@@ -171,7 +172,7 @@ class CtfDecodeTests(unittest.TestCase):
             self.decode([socket_start()], batch_size=0)
 
     def test_capture_identity_and_declared_outcomes_are_retained(self) -> None:
-        ((_, batch),) = ctf._batches(trace_source.messages([socket_start()]), None, 10)
+        ((_, batch),) = trace_source.decode(trace_source.messages([socket_start()]), None, 10)
         self.assertEqual(batch.schema.metadata[b"capture"], b"00000000-0000-0000-0000-000000000001")
         self.assertEqual(batch.schema.metadata[b"hostname"], b"test-host")
         events = [
@@ -187,7 +188,7 @@ class CtfDecodeTests(unittest.TestCase):
             )
             for i, outcome in enumerate(("success", "dropped"))
         ]
-        batches = list(ctf._batches(trace_source.messages(events), None, 1))
+        batches = list(trace_source.decode(trace_source.messages(events), None, 1))
         self.assertEqual(json.loads(batches[0][1].schema.metadata[b"outcomes"]), ["dropped", "success"])
 
     def test_batches_combine_streams_with_the_same_source_and_event(self) -> None:
@@ -195,14 +196,14 @@ class CtfDecodeTests(unittest.TestCase):
             trace_source.messages([socket_start(0)]),
             trace_source.messages([socket_start(1)]),
         )
-        batches = list(ctf._batches(messages, None, 2))
+        batches = list(trace_source.decode(messages, None, 2))
         self.assertEqual([batch.num_rows for _, batch in batches], [2])
         self.assertEqual(batches[0][1].column("trace_id").to_pylist(), [0, 1])
 
     def test_rejects_missing_capture_identity(self) -> None:
         for options in ({"uid": None}, {"hostname": None}):
             with self.subTest(options=options), self.assertRaisesRegex(ctf.CtfError, "UUID and hostname"):
-                list(ctf._batches(trace_source.messages([socket_start()], **options), None, 10))
+                list(trace_source.decode(trace_source.messages([socket_start()], **options), None, 10))
 
 
 if __name__ == "__main__":

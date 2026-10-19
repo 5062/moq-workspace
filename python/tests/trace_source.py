@@ -10,6 +10,12 @@ payload holds unsigned integers and unsigned enumerations, and the optional
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Collection, Iterable, Iterator
+
+import pyarrow as pa
+
+from moq_trace.decode import ctf
+from moq_trace.errors import CtfError
 
 try:
     import bt2
@@ -187,3 +193,23 @@ if bt2 is not None:
             trace = trace_class(uid=uid, environment={} if hostname is None else {"hostname": hostname})
             streams = {key: trace.create_stream(stream_class) for key, stream_class in stream_classes.items()}
             self._add_output_port("out", (streams, event_classes, labels, items))
+
+
+def decode(
+    messages: Iterable,
+    expected_pids: Collection[int] | None,
+    batch_size: int,
+) -> Iterator[tuple[str, pa.RecordBatch]]:
+    """Exercise the native decoder with real Babeltrace message wrappers in tests."""
+
+    from moq_trace import _native_ctf
+
+    try:
+        decoder = _native_ctf.MessageDecoder(
+            list(ctf.SCHEMAS.items()), None if expected_pids is None else list(expected_pids), batch_size
+        )
+        for message in messages:
+            yield from decoder.push(message)
+        yield from decoder.finish()
+    except _native_ctf.DecodeError as error:
+        raise CtfError(str(error)) from error
