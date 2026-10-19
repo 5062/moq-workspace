@@ -359,9 +359,6 @@ def _verify_transport_metrics(connection: duckdb.DuckDBPyConnection, transport_p
 
     if transport_profile == "generic":
         return
-    if transport_profile != "quinn":
-        raise TraceError(f"unsupported transport profile: {transport_profile}")
-
     for phase in _QUINN_PHASES:
         required = f"rx_{phase}"
         count = _count(connection, "SELECT count(*) FROM metrics.statistics WHERE metric = ?", [required])

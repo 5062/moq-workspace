@@ -12,3 +12,4 @@
 /python/dist/
 /python/src/*.egg-info/
 /python/native/target/
+/.vscode/
