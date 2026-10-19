@@ -193,8 +193,8 @@ data it had, with its reason: the congestion window, pacing, the
 anti-amplification limit, connection or stream flow control, or a full send
 buffer. A stack keeps one interval open per reason while the condition holds,
 per connection for the transmit reasons and per stream for a blocked write, and
-it ends when the data could go out. Google QUICHE and mvfst emit it; the Quinn
-fork does not yet.
+it ends when the data could go out. Google QUICHE, mvfst, and the Quinn fork
+emit it.
 
 Analysis accepts implementation-independent transport traces by default. Use
 `--transport-profile quinn` when the capture must contain the Quinn `routing`
