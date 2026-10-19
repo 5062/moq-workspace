@@ -73,4 +73,19 @@ ANTI JOIN (
 ) AS outer_phase
   ON outer_phase.trace_id = inner_phase.trace_id
  AND outer_phase.start_ns <= inner_phase.start_ns AND inner_phase.end_ns <= outer_phase.end_ns
-WHERE inner_phase.outcome = 'success';
+WHERE inner_phase.outcome = 'success'
+UNION ALL
+SELECT 'packets sharing a trace ID', count(*)
+FROM (SELECT trace_id FROM model.packets GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'phase intervals sharing a subject, trace ID, span ID, and phase', count(*)
+FROM (SELECT subject, trace_id, span_id, phase FROM model.intervals GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'objects sharing a trace ID', count(*)
+FROM (SELECT trace_id FROM model.objects GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'send-blocked intervals sharing a span ID', count(*)
+FROM (SELECT span_id FROM model.send_blocked GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'emission delays listing an event twice', count(*)
+FROM (SELECT event FROM model.emission_delays GROUP BY ALL HAVING count(*) > 1);

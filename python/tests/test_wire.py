@@ -274,6 +274,31 @@ class WireTests(unittest.TestCase):
         datagrams = list(pcap.read_datagrams(self.directory / "loopback.pcap", RELAY[1], (LOOPBACK,)))
         self.assertEqual([(d.realtime_ns, d.from_peer) for d in datagrams], [(2, False), (3, True)])
 
+    def test_the_wire_checks_reject_a_repeated_row(self) -> None:
+        self.prepare()
+        self.ingest()
+        connection = self.trace.connection
+        for table, check, defect in (
+            ("network.wire_connections", "wire/checks", "wire connections sharing an index"),
+            ("network.wire_packets", "wire/checks", "wire packets sharing an ID"),
+            ("network.wire_coverage", "wire/coverage-checks", "wire objects covered twice"),
+            ("network.wire_coverage_frames", "wire/coverage-checks", "duplicate wire coverage frames"),
+            (
+                "network.wire_coverage_packets",
+                "wire/coverage-checks",
+                "wire coverage packets listed twice for one object",
+            ),
+        ):
+            with self.subTest(table=table):
+                self.assertTrue(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+                connection.execute("BEGIN")
+                try:
+                    connection.execute(f"INSERT INTO {table} SELECT * FROM {table} LIMIT 1")
+                    with self.assertRaisesRegex(TraceError, f"{defect}: 1"):
+                        sql.check(connection, check, {"tolerance": 0} if check == "wire/checks" else None)
+                finally:
+                    connection.execute("ROLLBACK")
+
     def test_a_trace_packet_missing_from_the_wire_is_rejected(self) -> None:
         self.records.pop()
         self.prepare()
@@ -430,6 +455,7 @@ class CoverageAgreementTests(unittest.TestCase):
             CREATE TABLE model.coverage (object_trace_id UBIGINT, complete_packet_trace_id UBIGINT);
             CREATE TABLE network.wire_coverage_packets (object_trace_id UBIGINT, packet_trace_id UBIGINT);
             CREATE TABLE network.wire_coverage (object_trace_id UBIGINT, complete_packet_trace_id UBIGINT);
+            CREATE TABLE network.wire_coverage_frames (object_trace_id UBIGINT, seq UINTEGER);
             CREATE TABLE network.wire_packets (packet_id UBIGINT, trace_id UBIGINT)""")
         connection.executemany("INSERT INTO model.coverage_packets VALUES (?, ?)", trace)
         connection.executemany("INSERT INTO network.wire_coverage_packets VALUES (?, ? + 100)", wire)

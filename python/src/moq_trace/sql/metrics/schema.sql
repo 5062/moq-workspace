@@ -4,8 +4,7 @@ CREATE TABLE metrics.definitions (
     label VARCHAR NOT NULL,
     unit VARCHAR NOT NULL,
     grain VARCHAR NOT NULL,
-    display_order INTEGER NOT NULL,
-    PRIMARY KEY (metric)
+    display_order INTEGER NOT NULL
 );
 
 CREATE TABLE metrics.samples (
@@ -15,8 +14,7 @@ CREATE TABLE metrics.samples (
     packet_trace_id UBIGINT,
     span_id UBIGINT,
     elapsed_ns BIGINT NOT NULL,
-    value_ns BIGINT NOT NULL,
-    FOREIGN KEY (metric) REFERENCES metrics.definitions(metric)
+    value_ns BIGINT NOT NULL
 );
 
 CREATE TABLE metrics.statistics (
@@ -26,8 +24,7 @@ CREATE TABLE metrics.statistics (
     p50_ns DOUBLE NOT NULL,
     p95_ns DOUBLE NOT NULL,
     p99_ns DOUBLE NOT NULL,
-    max_ns BIGINT NOT NULL,
-    PRIMARY KEY (metric)
+    max_ns BIGINT NOT NULL
 );
 
 CREATE TABLE metrics.phase_totals (
@@ -35,8 +32,7 @@ CREATE TABLE metrics.phase_totals (
     direction direction NOT NULL,
     trace_id UBIGINT NOT NULL,
     phase VARCHAR NOT NULL,
-    total_ns BIGINT NOT NULL,
-    PRIMARY KEY (subject, trace_id, phase)
+    total_ns BIGINT NOT NULL
 );
 
 -- Object statistics split by the object's position in its group. Every group
@@ -51,8 +47,7 @@ CREATE TABLE metrics.position_statistics (
     p50_ns DOUBLE NOT NULL,
     p95_ns DOUBLE NOT NULL,
     p99_ns DOUBLE NOT NULL,
-    max_ns BIGINT NOT NULL,
-    PRIMARY KEY (metric, position)
+    max_ns BIGINT NOT NULL
 );
 
 -- The inbound objects whose slowest copy lies nearest each summary statistic of
@@ -62,6 +57,5 @@ CREATE TABLE metrics.timeline_selections (
     statistic VARCHAR NOT NULL,
     target_ns DOUBLE NOT NULL,
     rx_trace_id UBIGINT NOT NULL,
-    actual_ns BIGINT NOT NULL,
-    PRIMARY KEY (selection_order)
+    actual_ns BIGINT NOT NULL
 );

@@ -40,4 +40,11 @@ UNION ALL
 -- clock conversion, has a misplaced start.
 SELECT 'RX packets that start before their datagram was captured', count(*)
 FROM network.wire_packets AS wire JOIN traced AS trace USING (trace_id)
-WHERE wire.direction = 'rx' AND trace.start_ns < wire.timestamp_ns - $tolerance;
+WHERE wire.direction = 'rx' AND trace.start_ns < wire.timestamp_ns - $tolerance
+UNION ALL
+-- Tables declare no keys, so these reject the duplicates a key would.
+SELECT 'wire connections sharing an index', count(*)
+FROM (SELECT connection FROM network.wire_connections GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'wire packets sharing an ID', count(*)
+FROM (SELECT packet_id FROM network.wire_packets GROUP BY ALL HAVING count(*) > 1);

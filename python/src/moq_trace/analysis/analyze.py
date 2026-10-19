@@ -130,6 +130,7 @@ def _select_process(
     and joins on IDs alone are unambiguous.
     """
 
+    sql.check(connection, "checks/processes")
     if pid is None:
         if len(captured) != 1:
             raise TraceError(
@@ -331,9 +332,9 @@ def _define_metrics(connection: duckdb.DuckDBPyConnection) -> None:
             catalog.append((metric, "packet", metric.replace("_", " "), "ns", "occurrence", len(catalog)))
     connection.executemany("INSERT INTO metrics.definitions VALUES (?, ?, ?, ?, ?, ?)", catalog)
     connection.execute("INSERT INTO metrics.samples BY NAME SELECT * FROM staged_samples")
-    sql.check(connection, "checks/samples")
     for populate in ("metrics/statistics-populate", "metrics/phase-totals-populate", "timeline/populate"):
         connection.execute(sql.read(populate))
+    sql.check(connection, "checks/samples")
 
 
 def _ingest_network(connection: duckdb.DuckDBPyConnection, path: pathlib.Path, origin: int) -> NetworkCapabilities:

@@ -18,4 +18,13 @@ SELECT 'objects completed by a different packet', count(*)
 FROM model.coverage AS trace
 JOIN network.wire_coverage AS wire USING (object_trace_id)
 JOIN network.wire_packets AS packet ON packet.packet_id = wire.complete_packet_trace_id
-WHERE packet.trace_id IS DISTINCT FROM trace.complete_packet_trace_id;
+WHERE packet.trace_id IS DISTINCT FROM trace.complete_packet_trace_id
+UNION ALL
+SELECT 'duplicate wire coverage frames', count(*)
+FROM (SELECT object_trace_id, seq FROM network.wire_coverage_frames GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'wire objects covered twice', count(*)
+FROM (SELECT object_trace_id FROM network.wire_coverage GROUP BY ALL HAVING count(*) > 1)
+UNION ALL
+SELECT 'wire coverage packets listed twice for one object', count(*)
+FROM (SELECT object_trace_id, packet_trace_id FROM network.wire_coverage_packets GROUP BY ALL HAVING count(*) > 1);

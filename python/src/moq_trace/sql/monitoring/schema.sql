@@ -1,25 +1,23 @@
 CREATE SCHEMA monitoring;
+-- No keys: `analysis.monitoring.ingest` rejects repeated hosts, roles, and samples,
+-- since every counter must strictly advance.
 CREATE TABLE monitoring.window (origin_ns BIGINT, start_ns BIGINT, end_ns BIGINT);
 CREATE TABLE monitoring.hosts (
     host VARCHAR, role VARCHAR, pid INTEGER,
-    offset_ns BIGINT, uncertainty_ns BIGINT, sampled BOOLEAN,
-    PRIMARY KEY (host, role)
+    offset_ns BIGINT, uncertainty_ns BIGINT, sampled BOOLEAN
 );
 CREATE TABLE monitoring.resources (
     host VARCHAR, role VARCHAR, pid INTEGER, start_ticks UBIGINT,
     monotonic_ns BIGINT, elapsed_ns BIGINT, clock_ticks BIGINT,
-    user_ticks UBIGINT, system_ticks UBIGINT, rss_bytes UBIGINT,
-    PRIMARY KEY (host, role, elapsed_ns)
+    user_ticks UBIGINT, system_ticks UBIGINT, rss_bytes UBIGINT
 );
 CREATE TABLE monitoring.threads (
     host VARCHAR, role VARCHAR, pid INTEGER, tid INTEGER, start_ticks UBIGINT, name VARCHAR,
-    elapsed_ns BIGINT, clock_ticks BIGINT, user_ticks UBIGINT, system_ticks UBIGINT,
-    PRIMARY KEY (host, role, tid, start_ticks, elapsed_ns)
+    elapsed_ns BIGINT, clock_ticks BIGINT, user_ticks UBIGINT, system_ticks UBIGINT
 );
 CREATE TABLE monitoring.deliveries (
     host VARCHAR, pid INTEGER, connection UBIGINT,
-    monotonic_ns BIGINT, elapsed_ns BIGINT, bytes UBIGINT, objects UBIGINT,
-    PRIMARY KEY (host, pid, connection, elapsed_ns)
+    monotonic_ns BIGINT, elapsed_ns BIGINT, bytes UBIGINT, objects UBIGINT
 );
 
 CREATE VIEW monitoring.resource_intervals AS

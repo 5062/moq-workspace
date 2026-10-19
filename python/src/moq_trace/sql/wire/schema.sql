@@ -12,8 +12,7 @@ CREATE TABLE network.wire_connections (
     -- Trace-clock times of the connection's first and last captured datagram.
     first_ns BIGINT NOT NULL,
     last_ns BIGINT NOT NULL,
-    trace_connection_id UBIGINT,
-    PRIMARY KEY (connection)
+    trace_connection_id UBIGINT
 );
 
 CREATE TABLE network.wire_packets (
@@ -31,8 +30,7 @@ CREATE TABLE network.wire_packets (
     datagram UBIGINT NOT NULL,
     segment UINTEGER NOT NULL,
     packet_index UINTEGER NOT NULL,
-    trace_id UBIGINT,
-    PRIMARY KEY (packet_id)
+    trace_id UBIGINT
 );
 
 CREATE TABLE network.wire_stream_frames (

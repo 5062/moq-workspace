@@ -1,5 +1,9 @@
 -- An artifact is one process's slice of a capture, so its tables carry no
 -- process column: `processes` names the analyzed process.
+--
+-- Artifact tables declare no keys. Each table is written once and checked once
+-- complete, so the check queries reject duplicates instead: a key would keep an
+-- index current on every row, which costs seconds per million rows.
 CREATE SCHEMA model;
 
 CREATE SCHEMA metrics;
@@ -32,8 +36,7 @@ CREATE TABLE model.objects (
     rx_trace_id UBIGINT,
     copy_ordinal UINTEGER,
     -- The thread that started the lifecycle.
-    tid UBIGINT NOT NULL,
-    PRIMARY KEY (trace_id)
+    tid UBIGINT NOT NULL
 );
 
 CREATE TABLE model.packets (
@@ -49,8 +52,7 @@ CREATE TABLE model.packets (
     start_ctf_ns BIGINT NOT NULL,
     end_ctf_ns BIGINT NOT NULL,
     -- The thread that started the lifecycle.
-    tid UBIGINT NOT NULL,
-    PRIMARY KEY (trace_id)
+    tid UBIGINT NOT NULL
 );
 
 CREATE TABLE model.intervals (
@@ -63,8 +65,7 @@ CREATE TABLE model.intervals (
     end_ns BIGINT NOT NULL,
     outcome outcome NOT NULL,
     -- The thread that started the interval.
-    tid UBIGINT NOT NULL,
-    PRIMARY KEY (subject, trace_id, span_id, phase)
+    tid UBIGINT NOT NULL
 );
 
 -- Intervals in which a connection could not send, and why. A blocked write
@@ -75,8 +76,7 @@ CREATE TABLE model.send_blocked (
     stream_id UBIGINT,
     reason VARCHAR NOT NULL,
     start_ns BIGINT NOT NULL,
-    end_ns BIGINT NOT NULL,
-    PRIMARY KEY (span_id)
+    end_ns BIGINT NOT NULL
 );
 
 -- How long hooks held each event type between the instant it stamped and the
@@ -85,8 +85,7 @@ CREATE TABLE model.send_blocked (
 CREATE TABLE model.emission_delays (
     event VARCHAR NOT NULL,
     events UBIGINT NOT NULL,
-    max_ns BIGINT NOT NULL,
-    PRIMARY KEY (event)
+    max_ns BIGINT NOT NULL
 );
 
 -- The steady-state window, filled once it is selected. `origin_ns` is the
@@ -99,6 +98,5 @@ CREATE TABLE model.window (
 
 -- The inbound objects inside the window.
 CREATE TABLE model.selected_objects (
-    trace_id UBIGINT NOT NULL,
-    PRIMARY KEY (trace_id)
+    trace_id UBIGINT NOT NULL
 );

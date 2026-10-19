@@ -41,6 +41,6 @@ def write_raw_metadata(connection: duckdb.DuckDBPyConnection, kind: str, encoded
     """Write metadata JSON directly, as a different version of the tool would."""
 
     connection.execute(
-        """CREATE TABLE metadata(kind VARCHAR PRIMARY KEY, schema_version INTEGER NOT NULL, value JSON NOT NULL)"""
+        """CREATE TABLE metadata(kind VARCHAR NOT NULL, schema_version INTEGER NOT NULL, value JSON NOT NULL)"""
     )
     connection.execute("INSERT INTO metadata VALUES (?, ?, ?)", [kind, SCHEMA_VERSION, encoded])

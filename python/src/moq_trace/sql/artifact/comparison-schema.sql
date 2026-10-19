@@ -9,6 +9,5 @@ CREATE TABLE runs (
     dimension_value BIGINT,
     repeat UINTEGER NOT NULL,
     database VARCHAR NOT NULL,
-    metadata JSON NOT NULL,
-    PRIMARY KEY (run_id)
+    metadata JSON NOT NULL
 );

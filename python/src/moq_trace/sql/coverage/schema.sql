@@ -7,8 +7,7 @@ CREATE TABLE {coverage}_frames (
     offset_start UBIGINT NOT NULL,
     offset_end UBIGINT NOT NULL,
     covered_start UBIGINT NOT NULL,
-    covered_end UBIGINT NOT NULL,
-    PRIMARY KEY (object_trace_id, seq)
+    covered_end UBIGINT NOT NULL
 );
 
 CREATE TABLE {coverage} (
@@ -24,14 +23,12 @@ CREATE TABLE {coverage} (
     -- carrying it completes, and an RX frame when the stream's receive buffer
     -- accepts it.
     first_ns BIGINT NOT NULL,
-    complete_ns BIGINT NOT NULL,
-    PRIMARY KEY (object_trace_id)
+    complete_ns BIGINT NOT NULL
 );
 
 CREATE TABLE {coverage}_packets (
     object_trace_id UBIGINT NOT NULL,
     packet_trace_id UBIGINT NOT NULL,
     first_seq UINTEGER NOT NULL,
-    ordinal UINTEGER NOT NULL,
-    PRIMARY KEY (object_trace_id, packet_trace_id)
+    ordinal UINTEGER NOT NULL
 );
