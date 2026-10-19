@@ -18,11 +18,10 @@ from collections.abc import Mapping, Sequence
 from typing import Any, get_args
 
 import pydantic
-from moq_trace.errors import MoqTraceError
-from moq_trace.metadata import ComparisonDimension
 
+from ..errors import ExperimentError, MoqTraceError
+from ..metadata import ComparisonDimension
 from .config import ExperimentConfig, Hosts
-from .errors import ExperimentError
 from .suite import Suite
 from .suite import revision as suite_revision
 
@@ -229,9 +228,8 @@ async def bench(
 
     # Deferred like the CLI's own imports: the runner pulls in the analysis stack,
     # which parsing the command line does not need.
-    from moq_trace.analysis.comparison import snapshot_bench
-    from moq_trace.plot.render import render
-
+    from ..analysis.comparison import snapshot_bench
+    from ..plot.render import render
     from .experiment import run
     from .ssh import SshPool
 

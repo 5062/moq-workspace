@@ -8,17 +8,16 @@ import pathlib
 import re
 from collections.abc import Callable, Sequence
 
-from moq_trace.analysis.analyze import run as analyze
-from moq_trace.analysis.artifact import open_artifact
-from moq_trace.capture.hosts import Process
-from moq_trace.metadata import Binaries, CommandSet, Window, Workload
-from moq_trace.plot.render import render
-
+from ..analysis.analyze import run as analyze
+from ..analysis.artifact import open_artifact
+from ..capture.hosts import Process
+from ..errors import ExperimentError
+from ..metadata import Binaries, CommandSet, Window, Workload
+from ..plot.render import render
 from . import tls
 from .capture import Capture, CaptureSession
 from .commands import commands
 from .config import ExperimentConfig
-from .errors import ExperimentError
 from .placement import Placement
 from .ssh import SshPool
 
@@ -146,7 +145,7 @@ async def run(config: ExperimentConfig, pool: SshPool) -> pathlib.Path:
     capture = await _capture(config, command, placement)
     if capture.trace is None:
         if capture.monitoring is not None:
-            from moq_trace.analysis.monitoring import write_summary
+            from ..analysis.monitoring import write_summary
 
             await asyncio.to_thread(write_summary, capture.monitoring)
         return output
@@ -181,7 +180,7 @@ async def run(config: ExperimentConfig, pool: SshPool) -> pathlib.Path:
     )
     await asyncio.to_thread(_validate_workload, database)
     if capture.monitoring is not None:
-        from moq_trace.analysis.monitoring import write_summary
+        from ..analysis.monitoring import write_summary
 
         await asyncio.to_thread(write_summary, capture.monitoring, database)
     if config.render:

@@ -8,8 +8,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from moq_workspace_bench import bench, cli, suite
-from moq_workspace_bench.bench import RelayProfile, experiment_config, load_profile, profiles
+from moq_trace.run import bench, cli, suite
+from moq_trace.run.bench import RelayProfile, experiment_config, load_profile, profiles
 
 SUITE = suite.load(pathlib.Path(__file__).resolve().parent / "fixtures/suite" / suite.FILE)
 SETTINGS = {"protocol": SUITE.protocol}
@@ -99,7 +99,7 @@ class BenchTests(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as directory,
-            mock.patch("moq_workspace_bench.experiment.run", side_effect=run) as runner,
+            mock.patch("moq_trace.run.experiment.run", side_effect=run) as runner,
             mock.patch.object(bench, "suite_revision", return_value="b" * 40) as revision,
         ):
             root = pathlib.Path(directory)
@@ -149,7 +149,7 @@ class BenchTests(unittest.TestCase):
 
     def test_bench_checks_every_binary_before_running(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            with mock.patch("moq_workspace_bench.experiment.run", new_callable=mock.AsyncMock) as run:
+            with mock.patch("moq_trace.run.experiment.run", new_callable=mock.AsyncMock) as run:
                 with self.assertRaisesRegex(ValueError, "relay binary not found"):
                     asyncio.run(
                         bench.bench(
@@ -170,7 +170,7 @@ class BenchTests(unittest.TestCase):
                 (root / binary).touch()
             # A bug, not an expected failure, must not stop the relays after it either.
             outcomes = [TypeError("relay exited"), root / "out/beta/analysis.duckdb"]
-            with mock.patch("moq_workspace_bench.experiment.run", new_callable=mock.AsyncMock, side_effect=outcomes):
+            with mock.patch("moq_trace.run.experiment.run", new_callable=mock.AsyncMock, side_effect=outcomes):
                 results = asyncio.run(
                     bench.bench(
                         SUITE,
@@ -216,7 +216,7 @@ class BenchTests(unittest.TestCase):
                 return config.output / "analysis.duckdb"
 
             with (
-                mock.patch("moq_workspace_bench.experiment.run", side_effect=run) as runner,
+                mock.patch("moq_trace.run.experiment.run", side_effect=run) as runner,
                 mock.patch("moq_trace.analysis.comparison.snapshot_bench") as snapshot,
                 mock.patch("moq_trace.plot.render.render") as render,
             ):
@@ -273,7 +273,7 @@ class BenchTests(unittest.TestCase):
             cli._relays(" , ")
 
     def test_an_unknown_relay_fails_before_any_run(self) -> None:
-        with mock.patch("moq_workspace_bench.experiment.run", new_callable=mock.AsyncMock) as run:
+        with mock.patch("moq_trace.run.experiment.run", new_callable=mock.AsyncMock) as run:
             with self.assertRaisesRegex(ValueError, "unknown relay 'moq'; available: alpha, beta"):
                 asyncio.run(bench.bench(SUITE, ["moq", "alpha"], pathlib.Path("out"), {}))
         run.assert_not_called()
@@ -316,7 +316,7 @@ class SuiteTests(unittest.TestCase):
             async def run(config, _pool):
                 return config.output
 
-            with mock.patch("moq_workspace_bench.experiment.run", side_effect=run) as runner:
+            with mock.patch("moq_trace.run.experiment.run", side_effect=run) as runner:
                 asyncio.run(
                     bench.bench(
                         SUITE,

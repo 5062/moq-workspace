@@ -5,10 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "moq-trace"
 version = "0.1.0"
-description = "Decode, analyze, and verify MoQ and QUIC traces."
+description = "Run MoQ relay experiments, and decode, analyze, and verify their traces."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "asyncssh>=2.14",
     "cryptography>=42",
     "dpkt>=1.9.8",
     "duckdb>=1.4",
@@ -30,6 +31,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["moq_trace"]
 
 [tool.ruff.format]
 quote-style = "double"

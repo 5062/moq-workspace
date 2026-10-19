@@ -5,8 +5,9 @@ from __future__ import annotations
 import pathlib
 import shutil
 
-from moq_trace.metadata import TransportProfile
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+
+from ..metadata import TransportProfile
 
 
 class StrictModel(BaseModel):

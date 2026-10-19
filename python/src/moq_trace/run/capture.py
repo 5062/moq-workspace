@@ -10,11 +10,10 @@ import pathlib
 import shlex
 from collections.abc import Sequence
 
-from moq_trace.analysis.network import capture_statistics
-from moq_trace.capture.hosts import Clock, Host, Process
-from moq_trace.capture.lttng import LttngSession
-from moq_trace.manifest import MANIFEST, QLOG_ENVIRONMENT, NetworkManifest
-
+from ..analysis.network import capture_statistics
+from ..capture.hosts import Clock, Host, Process
+from ..capture.lttng import LttngSession
+from ..manifest import MANIFEST, QLOG_ENVIRONMENT, NetworkManifest
 from . import tls
 from .config import ExperimentConfig
 from .monitoring import Monitoring

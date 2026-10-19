@@ -15,3 +15,7 @@ class TraceError(MoqTraceError):
 
 class CtfError(TraceError):
     """The CTF input is incomplete or incompatible with the analyzer schema."""
+
+
+class ExperimentError(MoqTraceError):
+    """An experiment's configuration or workload was not met."""

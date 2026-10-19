@@ -11,7 +11,7 @@ import re
 import subprocess
 import sys
 
-from moq_workspace_bench import bench, suite
+from moq_trace.run import bench, suite
 
 root = pathlib.Path(__file__).resolve().parents[1]
 loaded = suite.load(root / suite.FILE)

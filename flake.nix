@@ -53,9 +53,6 @@
               pkgs.pkg-config
               pkgs.rustPlatform.bindgenHook
               python
-              (pkgs.writeShellScriptBin "moq-workspace-bench" ''
-                exec ${python}/bin/python -P -m moq_workspace_bench.cli "$@"
-              '')
               (pkgs.writeShellScriptBin "moq-trace" ''
                 exec ${python}/bin/python -P -m moq_trace.run.cli "$@"
               '')
@@ -63,10 +60,10 @@
             hardeningDisable = [ "fortify" ];
             shellHook = ''
               moq_workspace_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-              if [ ! -d "$moq_workspace_root/bench/src/moq_workspace_bench" ]; then
+              if [ ! -d "$moq_workspace_root/python/src/moq_trace" ]; then
                 moq_workspace_root="$(git rev-parse --show-superproject-working-tree)"
               fi
-              export PYTHONPATH="$moq_workspace_root/bench/src:$moq_workspace_root/python/src''${PYTHONPATH:+:$PYTHONPATH}"
+              export PYTHONPATH="$moq_workspace_root/python/src''${PYTHONPATH:+:$PYTHONPATH}"
               unset moq_workspace_root
             '';
           };

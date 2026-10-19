@@ -38,22 +38,21 @@ decoder:
     cp target/ctf/release/lib_native_ctf.so python/src/moq_trace/_native_ctf.abi3.so
 
 # Check the native decoder, Python analysis/plots, runner, and provider contract.
-check-tools: decoder check-runner
+check-tools: decoder
     nix develop {{ root }} --command moq-trace --help
     nix develop {{ root }} --command cargo fmt --manifest-path python/native/Cargo.toml --check
     nix develop {{ root }} --command cargo test --locked --manifest-path python/native/Cargo.toml
     nix develop {{ root }} --command cargo clippy --locked --manifest-path python/native/Cargo.toml --all-targets -- -D warnings
     nix develop {{ root }} --command python -m unittest discover -s python/tests -v
-    nix develop {{ root }} --command ruff check python
-    nix develop {{ root }} --command ruff format --check python
+    nix develop {{ root }} --command python scripts/check-suite.py
+    nix develop {{ root }} --command ruff check --config python/pyproject.toml python scripts/check-suite.py
+    nix develop {{ root }} --command ruff format --check --config python/pyproject.toml python scripts/check-suite.py
 
 # Format the local Python tools and native decoder.
 fix-tools:
     nix develop {{ root }} --command cargo fmt --manifest-path python/native/Cargo.toml
-    nix develop {{ root }} --command ruff check --fix python
-    nix develop {{ root }} --command ruff format python
-    nix develop {{ root }} --command ruff check --fix --config bench/pyproject.toml bench scripts/check-suite.py
-    nix develop {{ root }} --command ruff format --config bench/pyproject.toml bench scripts/check-suite.py
+    nix develop {{ root }} --command ruff check --fix --config python/pyproject.toml python scripts/check-suite.py
+    nix develop {{ root }} --command ruff format --config python/pyproject.toml python scripts/check-suite.py
 
 # Compare actual Rust and C++ captures through the workspace decoder.
 check-contract: check-trace decoder
@@ -89,17 +88,10 @@ build-moq-bench:
 # Also checks that every relay profile loads and that moq-trace.toml pins the
 # protocol the peers pin.
 # Test and lint the bench peers, and check the bench suite.
-check-bench: check-runner
+check-bench: check-tools
     just _cargo moq-bench test --all-features
     just _cargo moq-bench clippy --all-targets --all-features -- -D warnings
     cd moq-bench && nix develop {{ trace_shell }} --command cargo fmt --all --check
-
-# Check experiment orchestration and the suite against the workspace's peers.
-check-runner:
-    nix develop {{ root }} --command python -m unittest discover -s bench/tests -v
-    nix develop {{ root }} --command python scripts/check-suite.py
-    nix develop {{ root }} --command ruff check --config bench/pyproject.toml bench scripts/check-suite.py
-    nix develop {{ root }} --command ruff format --check --config bench/pyproject.toml bench scripts/check-suite.py
 
 # Format the bench peers.
 fix-bench:
@@ -110,12 +102,12 @@ fix-bench:
 # Run the workspace experiment runner with this workspace's suite.
 [positional-arguments]
 bench *args: decoder
-    nix develop {{ root }} --command moq-workspace-bench bench "$@"
+    nix develop {{ root }} --command moq-trace bench "$@"
 
 # Run one experiment from TOML configuration, with optional --output.
 [positional-arguments]
 run *args: decoder
-    nix develop {{ root }} --command moq-workspace-bench run "$@"
+    nix develop {{ root }} --command moq-trace run "$@"
 
 # Lint the traced Rust relays against the pinned toolkit and forks.
 clippy-relays:

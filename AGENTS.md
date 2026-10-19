@@ -7,18 +7,19 @@ integration or a product for independent consumers.
 ## Python tooling
 
 `python/` owns `moq_trace`: decoding, analysis, artifact schemas, plotting,
-capture helpers, verification, and the Rust CTF reader in `python/native/`.
-`bench/` owns experiment workloads, relay launch profiles, local/SSH host
-placement, checkout synchronization, and capture orchestration.
+capture helpers, verification, the experiment runner, and the Rust CTF reader in
+`python/native/`. The `run` layer holds the `moq-trace` command line and the
+runner: experiment workloads, relay launch profiles, local/SSH host placement,
+checkout synchronization, and capture orchestration.
 
 Keep imports flowing from `decode` to `analysis` to `plot` to `run`; lower layers
 never import higher ones. `capture` holds host, process, LTTng, and resource
-collection primitives, imports no other layer, and is used by `run` and the
-bench runner; `capture/resources.py` runs on remote hosts and imports only the
-standard library. Root modules `errors`, `labels`, `manifest`, and `metadata`
-are shared contracts and import none of those layers. The bench runner may
-consume all layers; `moq_trace` never imports it. Re-analyzing an existing
-capture requires no SSH or live hosts. `python/tests/test_layering.py` enforces
+collection primitives, imports no other layer, and is used by `run`;
+`capture/resources.py` runs on remote hosts and imports only the standard
+library. Root modules `errors`, `labels`, `manifest`, and `metadata` are shared
+contracts and import none of those layers. Only `run` may import SSH or host
+orchestration code, so re-analyzing an existing capture requires no SSH or live
+hosts. `python/tests/test_layering.py` enforces
 the direction.
 
 Correlate providers by process, direction, connection ID, stream ID, and half-open
@@ -39,7 +40,7 @@ branches on relay names in the runner or analysis.
 
 Run commands through `nix develop --command just RECIPE`. `fix-tools` formats the
 Python tools and native decoder. `check-tools` tests the
-Python tooling, native decoder, and runner. `check-contract` runs the toolkit's
+Python tooling, including the runner, the native decoder, and the bench suite. `check-contract` runs the toolkit's
 unit checks and compares actual Rust/C++ captures. `check-bench` also checks the
 reference peers. `check-all` is the gate for changes to committed submodule pins.
 

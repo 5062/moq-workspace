@@ -6,9 +6,9 @@ import subprocess
 import tempfile
 import unittest
 
-from moq_workspace_bench import suite
-from moq_workspace_bench.config import Sync
-from moq_workspace_bench.placement import sync_script
+from moq_trace.run import suite
+from moq_trace.run.config import Sync
+from moq_trace.run.placement import sync_script
 
 
 def _git(directory: pathlib.Path, *args: str) -> str:

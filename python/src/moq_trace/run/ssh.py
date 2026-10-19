@@ -16,9 +16,9 @@ import signal
 from collections.abc import Awaitable, Sequence
 
 import asyncssh
-from moq_trace.capture.hosts import Channel, Completed, Host
-from moq_trace.errors import CaptureError
 
+from ..capture.hosts import Channel, Completed, Host
+from ..errors import CaptureError
 from .config import HostConfig
 
 # What an OpenSSH client reports when the connection, rather than the command,

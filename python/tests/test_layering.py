@@ -4,7 +4,7 @@ Analysis must be able to re-run on a capture without SSH or host code, and the
 decoders must stay usable without the DuckDB pipeline, so a lower layer
 importing a higher one fails here instead of surfacing as a dependency cycle.
 Capture primitives record processes and traces without knowing how they are
-analyzed, so the bench runner can drive them on any host.
+analyzed, so the experiment runner in `run` can drive them on any host.
 """
 
 from __future__ import annotations
@@ -29,9 +29,6 @@ LAYERS = set(ALLOWED)
 # Sent as source to SSH hosts and run with their own Python, so it may import
 # only the standard library.
 STANDALONE = PACKAGE / "capture" / "resources.py"
-
-# The experiment runner consumes this package; nothing here may depend on it.
-RUNNER = "moq_workspace_bench"
 
 
 def imported_modules(source: str, package: tuple[str, ...]) -> set[tuple[str, ...]]:
@@ -91,12 +88,6 @@ class LayeringTests(unittest.TestCase):
         for path in sorted(PACKAGE.glob("*.py")):
             with self.subTest(module=path.name):
                 self.assertEqual(imported_layers(path), set())
-
-    def test_package_does_not_import_the_runner(self) -> None:
-        for path in sorted(PACKAGE.rglob("*.py")):
-            with self.subTest(module=str(path.relative_to(PACKAGE))):
-                modules = imported_modules(path.read_text(), _package(path))
-                self.assertNotIn(RUNNER, {module[0] for module in modules})
 
     def test_standalone_collector_imports_only_the_standard_library(self) -> None:
         modules = imported_modules(STANDALONE.read_text(), _package(STANDALONE))

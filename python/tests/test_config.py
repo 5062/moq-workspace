@@ -9,15 +9,15 @@ from unittest import mock
 import duckdb
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from moq_trace.analysis.artifact import write_metadata
-from moq_trace.errors import CaptureError
 from pydantic import ValidationError
 from run_support import placement_for, run_metadata
 
-from moq_workspace_bench import experiment, tcpdump, tls
-from moq_workspace_bench.commands import commands
-from moq_workspace_bench.config import ExperimentConfig, HostConfig, Hosts
-from moq_workspace_bench.experiment import ExperimentError, _validate_workload
+from moq_trace.analysis.artifact import write_metadata
+from moq_trace.errors import CaptureError
+from moq_trace.run import experiment, tcpdump, tls
+from moq_trace.run.commands import commands
+from moq_trace.run.config import ExperimentConfig, HostConfig, Hosts
+from moq_trace.run.experiment import ExperimentError, _validate_workload
 
 PROTOCOL = "moq-transport-16"
 

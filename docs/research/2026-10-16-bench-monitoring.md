@@ -4,7 +4,7 @@ Research date: 2026-10-16. Recommendation: add lightweight process CPU and memor
 
 ## Existing behavior
 
-[`bench/README.md`](../../bench/README.md) documents relay-host packet capture for directional UDP throughput and qlog for RTT, loss, and congestion window. Both require opt-in flags. It warns that per-packet qlog serialization affects latency measurements. Capture wall time is mapped to the trace clock; qlog must provide its monotonic start instant. Only the relay host is currently traced.
+[`python/README.md`](../../python/README.md#running-experiments) documents relay-host packet capture for directional UDP throughput and qlog for RTT, loss, and congestion window. Both require opt-in flags. It warns that per-packet qlog serialization affects latency measurements. Capture wall time is mapped to the trace clock; qlog must provide its monotonic start instant. Only the relay host is currently traced.
 
 ## Process baseline
 

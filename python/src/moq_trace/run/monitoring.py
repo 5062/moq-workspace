@@ -8,9 +8,8 @@ import shlex
 import time
 from importlib.resources import files
 
-from moq_trace.capture.hosts import Host, Process
-from moq_trace.manifest import MONITORING_MANIFEST, MonitoringHost, MonitoringManifest
-
+from ..capture.hosts import Host, Process
+from ..manifest import MONITORING_MANIFEST, MonitoringHost, MonitoringManifest
 from .config import ExperimentConfig
 from .placement import Placement
 

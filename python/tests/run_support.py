@@ -5,9 +5,8 @@ import shlex
 
 from moq_trace.capture import hosts, local
 from moq_trace.metadata import CommandSet, Counts, Processes, RunMetadata, TransportCapabilities, Window, Workload
-
-from moq_workspace_bench import placement, ssh
-from moq_workspace_bench.config import ExperimentConfig, HostConfig
+from moq_trace.run import placement, ssh
+from moq_trace.run.config import ExperimentConfig, HostConfig
 
 
 def placement_for(config: ExperimentConfig, output: pathlib.Path | None = None) -> placement.Placement:

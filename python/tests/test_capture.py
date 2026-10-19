@@ -7,14 +7,14 @@ import time
 import unittest
 from unittest import mock
 
+from run_support import FakeRemote, command_set, peer, placement_for
+
 from moq_trace.errors import CaptureError
 from moq_trace.manifest import MANIFEST, read_manifest
 from moq_trace.metadata import CommandSet
-from run_support import FakeRemote, command_set, peer, placement_for
-
-from moq_workspace_bench import capture, experiment, placement, tcpdump
-from moq_workspace_bench.config import ExperimentConfig, HostConfig, Hosts, Sync
-from moq_workspace_bench.experiment import ExperimentError
+from moq_trace.run import capture, experiment, placement, tcpdump
+from moq_trace.run.config import ExperimentConfig, HostConfig, Hosts, Sync
+from moq_trace.run.experiment import ExperimentError
 
 
 class PacketCaptureTests(unittest.IsolatedAsyncioTestCase):

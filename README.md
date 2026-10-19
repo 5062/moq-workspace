@@ -9,8 +9,7 @@ experiments run on.
 
 | Path | Contents |
 |---|---|
-| `python/` | Decoding, analysis, plots, verification, and native CTF reader; see `python/README.md` |
-| `bench/` | Python experiment runner and its tests; see `bench/README.md` |
+| `python/` | Experiment runner, decoding, analysis, plots, verification, and native CTF reader; see `python/README.md` |
 | `moq-bench/` | The implementation-independent reference peers; see `moq-bench/README.md` |
 | `profiles/` | One `just bench` launch profile per relay |
 | `moq-trace.toml` | The bench suite: the profiles, the peers, and the protocol every relay negotiates |
@@ -95,8 +94,8 @@ nix develop --command just build-moq-dev-moq build-moq-bench
 nix develop --command just bench --relay moq-dev-moq --subscribers 4
 ```
 
-Inside the workspace shell, `moq-workspace-bench bench` does the same. Build
-each relay you bench first, and see [the runner documentation](bench/README.md)
+Inside the workspace shell, `moq-trace bench` does the same. Build
+each relay you bench first, and see [the runner documentation](python/README.md#running-experiments)
 for workload flags, sweeps, packet capture, and distributed runs.
 
 For a distributed run, `--hosts experiments/hosts.toml` places the roles on other

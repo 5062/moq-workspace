@@ -6,13 +6,12 @@ import tempfile
 import unittest
 from unittest import mock
 
-from moq_trace.capture import hosts, local
-from moq_trace.errors import CaptureError
 from run_support import peer
 
-from moq_workspace_bench import experiment, ssh
-from moq_workspace_bench.config import HostConfig
-from moq_workspace_bench.errors import ExperimentError
+from moq_trace.capture import hosts, local
+from moq_trace.errors import CaptureError, ExperimentError
+from moq_trace.run import experiment, ssh
+from moq_trace.run.config import HostConfig
 
 
 class _FakeSshProcess:
