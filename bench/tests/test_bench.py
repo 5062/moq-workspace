@@ -168,7 +168,8 @@ class BenchTests(unittest.TestCase):
             for binary in ("a/bin/alpha", "b/bin/beta"):
                 (root / binary).parent.mkdir(parents=True)
                 (root / binary).touch()
-            outcomes = [RuntimeError("relay exited"), root / "out/beta/analysis.duckdb"]
+            # A bug, not an expected failure, must not stop the relays after it either.
+            outcomes = [TypeError("relay exited"), root / "out/beta/analysis.duckdb"]
             with mock.patch("moq_workspace_bench.experiment.run", new_callable=mock.AsyncMock, side_effect=outcomes):
                 results = asyncio.run(
                     bench.bench(

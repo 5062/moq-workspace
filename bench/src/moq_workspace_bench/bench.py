@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, get_args
 
 import pydantic
+from moq_trace.errors import MoqTraceError
 from moq_trace.metadata import ComparisonDimension
 
 from .config import ExperimentConfig, Hosts
@@ -277,8 +278,8 @@ async def bench(
                 results.append(BenchResult(relay=name, value=value, path=await run(config, pool)))
             # Broad on purpose: one relay's failure, even a bug, must not cost the
             # relays after it their runs.
-            except (OSError, RuntimeError, ValueError) as error:
-                _log.info("%s failed: %s", label, error)
+            except Exception as error:
+                _log.info("%s failed: %s", label, error, exc_info=not isinstance(error, MoqTraceError))
                 results.append(BenchResult(relay=name, value=value, error=str(error)))
 
     # Each comparison directory and its traced runs, keyed as `plot` keys them:
