@@ -11,7 +11,7 @@ from matplotlib import ticker
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
-from .common import PlotRun, _copy_rows, _format_us, _quantile_box, _sample_presence, _save
+from .common import PlotRun, copy_rows, format_us, quantile_box, sample_presence, save_figure
 
 # The segments of the wire span in pipeline order. Their boundaries chain, from
 # the capture of an inbound object's first datagram through the socket read, the
@@ -72,7 +72,7 @@ def _draw_waterfall(axis: Axes, labels: Sequence[str], tables: Sequence[numpy.nd
             )
             if abs(mean) >= 0.07 * widest:
                 axis.annotate(
-                    _format_us(mean),
+                    format_us(mean),
                     (cursor + mean / 2, row),
                     ha="center",
                     va="center",
@@ -83,7 +83,7 @@ def _draw_waterfall(axis: Axes, labels: Sequence[str], tables: Sequence[numpy.nd
             cursor += mean
         total = table[:, 0]
         axis.annotate(
-            f"mean {_format_us(float(total.mean()))}, p50 {_format_us(float(numpy.median(total)))} µs (n={len(total)})",
+            f"mean {format_us(float(total.mean()))}, p50 {format_us(float(numpy.median(total)))} µs (n={len(total)})",
             (max(cursor, 0.0), row),
             xytext=(4, 0),
             textcoords="offset points",
@@ -115,10 +115,10 @@ def _draw_quantiles(
             y += 0.8
         for label, table in zip(labels, tables, strict=True):
             low, q1, median, q3, high = numpy.percentile(table[:, index + 1], _QUANTILES)
-            _quantile_box(axis, (low, q1, median, q3, high), y, 0.6, color)
+            quantile_box(axis, (low, q1, median, q3, high), y, 0.6, color)
             if single:
                 axis.annotate(
-                    f"{_format_us(median)} / {_format_us(float(table[:, index + 1].mean()))}",
+                    f"{format_us(median)} / {format_us(float(table[:, index + 1].mean()))}",
                     (1.01, y),
                     xycoords=("axes fraction", "data"),
                     va="center",
@@ -163,12 +163,12 @@ def plot_segments(
 
     if not runs:
         raise ValueError("a segments figure requires at least one run")
-    wire = all(_sample_presence(run.connection, "wire_full_span", run.run_id)[0] for run in runs)
+    wire = all(sample_presence(run.connection, "wire_full_span", run.run_id)[0] for run in runs)
     (total, total_label, bounds), segments = _segments(wire)
     metrics = (total, *(metric for metric, _label in segments))
     tables = []
     for run in runs:
-        rows = _copy_rows(run.connection, metrics, run.run_id)
+        rows = copy_rows(run.connection, metrics, run.run_id)
         if not rows:
             raise ValueError(f"cannot split {total} without copies that have every segment of it")
         tables.append(numpy.array(rows, dtype=float))
@@ -185,4 +185,4 @@ def plot_segments(
     waterfall.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=len(segments), fontsize=8)
     _draw_quantiles(quantiles, segments, labels, tables)
     quantiles.set_title("Segment distributions")
-    _save(fig, path, f"{title} | {subtitle}")
+    save_figure(fig, path, f"{title} | {subtitle}")

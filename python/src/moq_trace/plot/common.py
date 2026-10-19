@@ -24,13 +24,13 @@ class PlotRun:
     run_id: int | None = None
 
 
-def _format_us(value: float) -> str:
+def format_us(value: float) -> str:
     """Three significant digits, without switching to exponent form above 999."""
 
     return f"{value:.0f}" if value >= 1_000 else f"{value:.3g}"
 
 
-def _draw_distribution(
+def draw_distribution(
     ecdf: Axes,
     ccdf: Axes | None,
     values_us: numpy.ndarray,
@@ -50,7 +50,7 @@ def _draw_distribution(
         numpy.arange(count + 1, dtype=float) / count,
         where="post",
         color=color,
-        label=f"{label}: p50 {_format_us(p50)}, p99 {_format_us(p99)}, max {_format_us(values_us[-1])} µs (n={count})",
+        label=f"{label}: p50 {format_us(p50)}, p99 {format_us(p99)}, max {format_us(values_us[-1])} µs (n={count})",
     )
     ecdf.plot([p50], [0.5], marker="o", color=color)
     if ccdf is not None:
@@ -64,14 +64,14 @@ def _draw_distribution(
         )
 
 
-def _plain_log(axis: Axis) -> None:
+def plain_log(axis: Axis) -> None:
     """Label a log time axis with plain numbers instead of powers of ten."""
 
     axis.set_major_formatter(ticker.FuncFormatter(lambda value, _position: f"{value:g}"))
     axis.set_minor_formatter(ticker.NullFormatter())
 
 
-def _save(
+def save_figure(
     fig: Figure,
     path: pathlib.Path,
     title: str,
@@ -89,13 +89,11 @@ def _save(
     plt.close(fig)
 
 
-def _metrics(connection: duckdb.DuckDBPyConnection) -> set[str]:
+def metric_names(connection: duckdb.DuckDBPyConnection) -> set[str]:
     return {metric for (metric,) in connection.execute("SELECT DISTINCT metric FROM metrics.samples").fetchall()}
 
 
-def _sample_presence(
-    connection: duckdb.DuckDBPyConnection, metric: str, run_id: int | None = None
-) -> tuple[bool, bool]:
+def sample_presence(connection: duckdb.DuckDBPyConnection, metric: str, run_id: int | None = None) -> tuple[bool, bool]:
     """Whether a metric has any samples, and whether any of them is nonzero, without fetching them."""
 
     scope = " AND run_id = ?" if run_id is not None else ""
@@ -106,7 +104,7 @@ def _sample_presence(
     return bool(present), bool(nonzero)
 
 
-def _values_us(connection: duckdb.DuckDBPyConnection, metric: str, run_id: int | None = None) -> numpy.ndarray:
+def metric_values_us(connection: duckdb.DuckDBPyConnection, metric: str, run_id: int | None = None) -> numpy.ndarray:
     scope = " AND run_id = ?" if run_id is not None else ""
     return connection.execute(
         f"SELECT value_ns / 1000.0 AS us FROM metrics.samples WHERE metric = ?{scope} ORDER BY value_ns",
@@ -122,19 +120,19 @@ def _values_us(connection: duckdb.DuckDBPyConnection, metric: str, run_id: int |
 # lifecycle events, which each stack places at a different point of its
 # transport hand-off, so it describes one stack rather than ranking several.
 _WIRE_SPAN = ("wire_full_span", "Wire")
-_OBJECT_SPANS = (
+OBJECT_SPANS = (
     ("quic_full_span", "QUIC+MoQ (read to send)"),
     ("full_span", "MoQ (boundary differs by stack)"),
 )
 
 
-def _object_spans(wire: bool) -> tuple[tuple[str, str], ...]:
+def object_spans(wire: bool) -> tuple[tuple[str, str], ...]:
     """The object spans to draw, with the wire span when every run measured it."""
 
-    return (_WIRE_SPAN, *_OBJECT_SPANS) if wire else _OBJECT_SPANS
+    return (_WIRE_SPAN, *OBJECT_SPANS) if wire else OBJECT_SPANS
 
 
-def _copy_rows(
+def copy_rows(
     connection: duckdb.DuckDBPyConnection, metrics: Sequence[str], run_id: int | None = None
 ) -> list[tuple[float, ...]]:
     """One row of microsecond values per copy that has every one of `metrics`.
@@ -155,7 +153,7 @@ def _copy_rows(
     ).fetchall()
 
 
-def _quantile_box(axis: Axes, quantiles: Sequence[float], position: float, width: float, color: str) -> None:
+def quantile_box(axis: Axes, quantiles: Sequence[float], position: float, width: float, color: str) -> None:
     """Draw supplied p1, p25, p50, p75, and p99 without recomputing whiskers."""
 
     axis.bxp(
@@ -177,7 +175,7 @@ def _quantile_box(axis: Axes, quantiles: Sequence[float], position: float, width
 _PANEL_COLUMNS = 4
 
 
-def _cdf_panels(
+def cdf_panels(
     path: pathlib.Path,
     title: str,
     runs: Sequence[PlotRun],
@@ -195,7 +193,8 @@ def _cdf_panels(
         raise ValueError("a distribution figure requires at least one run")
     signed = signed or {}
     drawn = [
-        (metric, label, [_values_us(run.connection, metric, run.run_id) for run in runs]) for metric, label in panels
+        (metric, label, [metric_values_us(run.connection, metric, run.run_id) for run in runs])
+        for metric, label in panels
     ]
     drawn = [panel for panel in drawn if any(values.size for values in panel[2])]
     if not drawn:
@@ -208,7 +207,7 @@ def _cdf_panels(
     for axis, (metric, label, series) in zip(axes.flat, drawn, strict=False):
         for index, (run, values) in enumerate(zip(runs, series, strict=True)):
             if values.size:
-                _draw_distribution(axis, None, values, run.label or "Copies", index)
+                draw_distribution(axis, None, values, run.label or "Copies", index)
         axis.set_ylabel("CDF")
         axis.set_ylim(0, 1.005)
         axis.grid(alpha=0.25)
@@ -220,5 +219,5 @@ def _cdf_panels(
         else:
             axis.set_xlim(left=0)
             axis.set_xlabel("µs")
-    _save(fig, path, title)
+    save_figure(fig, path, title)
     return True

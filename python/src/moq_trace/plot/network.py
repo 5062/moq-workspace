@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
 from ..metadata import Workload
-from .common import _save
+from .common import save_figure
 
 
 def _no_data(axis: Axes, message: str) -> None:
@@ -194,4 +194,4 @@ def plot_network(
             kernel, interface = stats
             interface_text = interface if interface is not None else "unknown"
             subtitle += f" | capture drops: kernel {kernel}, interface {interface_text}"
-    _save(fig, path, f"Network during the run | {subtitle}")
+    save_figure(fig, path, f"Network during the run | {subtitle}")

@@ -1,7 +1,9 @@
-"""The description of a network capture that the runner writes and the analyzer reads.
+"""The descriptions of network and monitoring captures that the runner writes and the analyzer reads.
 
-The runner and the analyzer share this contract and nothing else about network
-capture, so it lives outside both: the run layer must not import the ingesters.
+The runner and the analyzer share these contracts and nothing else about a
+capture, so they live outside both: the run layer must not import the ingesters.
+The monitoring summary the analyzer writes beside a run is described here too,
+next to the manifest it summarizes.
 """
 
 from __future__ import annotations
@@ -22,18 +24,23 @@ QLOG_ENVIRONMENT = "QLOGDIR"
 
 MONITORING_MANIFEST = "monitoring.json"
 
+# Human-readable summary the analyzer writes beside the monitoring manifest.
+MONITORING_SUMMARY = "monitoring-summary.json"
+
+Role = Literal["relay", "publisher", "subscriber"]
+
 
 class MonitoringHost(BaseModel):
     """Host-local clocks mapped to the relay clock with an explicit error bound."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     host: str
-    roles: dict[Literal["relay", "publisher", "subscriber"], int]
+    roles: dict[Role, int]
     # Host monotonic minus relay monotonic; zero on the relay host.
     offset_ns: int
     uncertainty_ns: int = Field(ge=0)
     resources: str | None = None
-    resource_roles: tuple[Literal["relay", "publisher", "subscriber"], ...] = ()
+    resource_roles: tuple[Role, ...] = ()
 
 
 class MonitoringManifest(BaseModel):
@@ -65,7 +72,7 @@ class ResourceSample(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     schema_version: Literal[2]
-    role: Literal["relay", "publisher", "subscriber"]
+    role: Role
     pid: int = Field(gt=0)
     start_ticks: int = Field(ge=0)
     monotonic_ns: int = Field(ge=0)
@@ -87,6 +94,73 @@ class DeliverySample(BaseModel):
     connection: int = Field(ge=0)
     bytes: int = Field(ge=0)
     objects: int = Field(ge=0)
+
+
+class ResourceSummary(BaseModel):
+    """One process's resources over the window; CPU fields are absent without a complete interval."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    host: str
+    role: Role
+    pid: int = Field(gt=0)
+    samples: int = Field(gt=0)
+    mean_rss_bytes: float = Field(ge=0)
+    sampled_max_rss_bytes: int = Field(ge=0)
+    rss_growth_bytes: int
+    covered_seconds: float | None = Field(ge=0)
+    user_cpu_seconds: float | None = Field(ge=0)
+    system_cpu_seconds: float | None = Field(ge=0)
+    mean_cpu_cores: float | None = Field(ge=0)
+    max_cpu_cores: float | None = Field(ge=0)
+    sampled_threads: int | None = Field(ge=0)
+    busiest_thread_mean_cpu_cores: float | None = Field(ge=0)
+    busiest_thread_max_cpu_cores: float | None = Field(ge=0)
+
+
+class ThreadSummary(BaseModel):
+    """One thread lifetime's CPU over the complete intervals it was seen for."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    host: str
+    role: Role
+    pid: int = Field(gt=0)
+    tid: int = Field(gt=0)
+    start_ticks: int = Field(ge=0)
+    name: str
+    covered_seconds: float = Field(ge=0)
+    user_cpu_seconds: float = Field(ge=0)
+    system_cpu_seconds: float = Field(ge=0)
+    mean_cpu_cores: float = Field(ge=0)
+    max_cpu_cores: float = Field(ge=0)
+
+
+class DeliverySummary(BaseModel):
+    """One subscriber connection's delivered payload over the window."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    host: str
+    pid: int = Field(gt=0)
+    connection: int = Field(ge=0)
+    covered_seconds: float = Field(ge=0)
+    bytes: int = Field(ge=0)
+    objects: int = Field(ge=0)
+    bytes_per_second: float = Field(ge=0)
+    objects_per_second: float = Field(ge=0)
+
+
+class MonitoringSummary(BaseModel):
+    """The window's monitoring summaries, kept even for untraced runs."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    schema_version: Literal[2] = 2
+    window_seconds: float = Field(gt=0)
+    hosts: tuple[MonitoringHost, ...]
+    resources: tuple[ResourceSummary, ...]
+    threads: tuple[ThreadSummary, ...]
+    deliveries: tuple[DeliverySummary, ...]
+    # Absent when no delivery counters were collected, rather than zero.
+    total_goodput_bytes_per_second: float | None = Field(ge=0)
+    total_objects_per_second: float | None = Field(ge=0)
 
 
 class NetworkManifest(BaseModel):

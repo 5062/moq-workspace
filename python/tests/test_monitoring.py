@@ -13,7 +13,13 @@ from moq_trace.analysis import monitoring, sql
 from moq_trace.analysis.network import capture_statistics
 from moq_trace.capture import resources
 from moq_trace.errors import TraceError
-from moq_trace.manifest import MonitoringHost, MonitoringManifest, ResourceSample
+from moq_trace.manifest import (
+    MONITORING_SUMMARY,
+    MonitoringHost,
+    MonitoringManifest,
+    MonitoringSummary,
+    ResourceSample,
+)
 from moq_trace.plot.monitoring import plot_monitoring
 
 
@@ -113,8 +119,9 @@ class MonitoringTests(unittest.TestCase):
         plot_monitoring(output, "test", self.db)
         self.assertGreater(output.stat().st_size, 1000)
         monitoring.write_summary(self.path)
-        summary = json.loads((self.root / "monitoring-summary.json").read_text())
-        self.assertEqual(summary["total_goodput_bytes_per_second"], 3000.0)
+        summary = MonitoringSummary.model_validate_json((self.root / MONITORING_SUMMARY).read_text())
+        self.assertEqual(summary.total_goodput_bytes_per_second, 3000.0)
+        self.assertEqual([row.tid for row in summary.threads], [10, 11, 12])
 
     def test_counter_reset_and_pid_reuse_are_rejected(self):
         for field, value in (("user_ticks", 0), ("start_ticks", 999), ("monotonic_ns", 1_000_000_000)):

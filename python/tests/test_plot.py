@@ -23,7 +23,7 @@ from moq_trace.plot import (
     timeline,
 )
 from moq_trace.plot.breakdown import _row_summary
-from moq_trace.plot.common import _copy_rows, _draw_distribution
+from moq_trace.plot.common import copy_rows, draw_distribution
 from moq_trace.plot.render import _describe
 from moq_trace.plot.segments import _segments
 
@@ -94,7 +94,7 @@ class DistributionPlotTests(unittest.TestCase):
                 figure, (ecdf, ccdf, reference) = plt.subplots(1, 3)
                 try:
                     expected = reference.ecdf(values)
-                    _draw_distribution(ecdf, ccdf, values, "test", 0)
+                    draw_distribution(ecdf, ccdf, values, "test", 0)
                     actual = ecdf.lines[0]
                     numpy.testing.assert_array_equal(actual.get_xdata(), expected.get_xdata())
                     numpy.testing.assert_array_equal(actual.get_ydata(), expected.get_ydata())
@@ -179,7 +179,7 @@ class RunPlotTests(unittest.TestCase):
         self.assertEqual(timeline._active_time_us(timeline._rebase(selected).intervals), 37.0)
         self.assertIsNone(timeline._active_time_us(()))
         with mock.patch.object(timeline, "_timelines", return_value=(selected,)):
-            with mock.patch.object(timeline, "_save") as save:
+            with mock.patch.object(timeline, "save_figure") as save:
                 timeline.plot_object_timelines(pathlib.Path("unused.png"), SUBTITLE, None)
         figure = save.call_args.args[0]
         try:
@@ -204,10 +204,10 @@ class RunPlotTests(unittest.TestCase):
         connection = _artifact(packet_phases=False)
         try:
             (total, _label, _bounds), segments = _segments(wire=True)
-            rows = _copy_rows(connection, (total, *(metric for metric, _label in segments)))
+            rows = copy_rows(connection, (total, *(metric for metric, _label in segments)))
             # A copy that lacks one segment is left out rather than half drawn.
             connection.execute("DELETE FROM metrics.samples WHERE metric = 'wire_to_read' AND rx_trace_id = 0")
-            partial = _copy_rows(connection, (total, *(metric for metric, _label in segments)))
+            partial = copy_rows(connection, (total, *(metric for metric, _label in segments)))
         finally:
             connection.close()
         self.assertEqual(len(rows), 4)
@@ -251,7 +251,7 @@ class TransportWaitTitleTests(unittest.TestCase):
             )
             with tempfile.TemporaryDirectory() as directory:
                 output = pathlib.Path(directory) / "transport_waits.png"
-                with mock.patch("moq_trace.plot.transport_waits._cdf_panels", return_value=True) as panels:
+                with mock.patch("moq_trace.plot.transport_waits.cdf_panels", return_value=True) as panels:
                     plot_transport_waits(output, "waits", SUBTITLE, (PlotRun("", connection),))
             heading, _runs, drawn = panels.call_args.args[1:4]
             self.assertIn("Never blocked by: pacing", heading)

@@ -9,8 +9,16 @@ import duckdb
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
-from .breakdown import _draw_phase_cdfs
-from .common import PlotRun, _draw_distribution, _metrics, _object_spans, _sample_presence, _save, _values_us
+from .breakdown import draw_phase_cdfs
+from .common import (
+    PlotRun,
+    draw_distribution,
+    metric_names,
+    metric_values_us,
+    object_spans,
+    sample_presence,
+    save_figure,
+)
 
 
 def _decorate_distribution(ecdf: Axes, ccdf: Axes | None, minimum_count: int) -> None:
@@ -48,16 +56,16 @@ def plot_latency_cdf(
 
     fig, (ecdf, phases) = plt.subplots(1, 2, figsize=(15, 6))
     counts = []
-    for index, (metric, label) in enumerate(_object_spans("wire_full_span" in _metrics(connection))):
-        values = _values_us(connection, metric)
+    for index, (metric, label) in enumerate(object_spans("wire_full_span" in metric_names(connection))):
+        values = metric_values_us(connection, metric)
         if values.size == 0:
             raise ValueError(f"cannot plot object latency without {metric} samples")
-        _draw_distribution(ecdf, None, values, label, index)
+        draw_distribution(ecdf, None, values, label, index)
         counts.append(len(values))
     _decorate_distribution(ecdf, None, min(counts))
     ecdf.set_title("Object latency")
-    _draw_phase_cdfs(phases, connection)
-    _save(fig, path, f"Latency CDF | {subtitle}")
+    draw_phase_cdfs(phases, connection)
+    save_figure(fig, path, f"Latency CDF | {subtitle}")
 
 
 def plot_latency_comparison(
@@ -72,7 +80,7 @@ def plot_latency_comparison(
 
     if len(runs) < 2:
         raise ValueError("a latency comparison requires at least two runs")
-    spans = _object_spans(all(_sample_presence(run.connection, "wire_full_span", run.run_id)[0] for run in runs))
+    spans = object_spans(all(sample_presence(run.connection, "wire_full_span", run.run_id)[0] for run in runs))
     fig, axes = plt.subplots(
         2 if show_tail else 1,
         len(spans),
@@ -85,13 +93,13 @@ def plot_latency_comparison(
         ccdf = axes[1][column] if show_tail else None
         counts = []
         for index, run in enumerate(runs):
-            values = _values_us(run.connection, metric, run.run_id)
+            values = metric_values_us(run.connection, metric, run.run_id)
             if values.size == 0:
                 raise ValueError(f"cannot compare {run.label} without {metric} samples")
-            _draw_distribution(ecdf, ccdf, values, run.label, index)
+            draw_distribution(ecdf, ccdf, values, run.label, index)
             counts.append(len(values))
         _decorate_distribution(ecdf, ccdf, min(counts))
         if show_tail:
             ecdf.set_xlabel("")
         ecdf.set_title(label)
-    _save(fig, path, f"{title} | {subtitle}")
+    save_figure(fig, path, f"{title} | {subtitle}")

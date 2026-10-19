@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
 from ..analysis import phases
-from .common import _OBJECT_SPANS, _metrics, _plain_log, _save
+from .common import OBJECT_SPANS, metric_names, plain_log, save_figure
 
 _QUEUING = next(phase for phase in phases.select("packet", "rx") if phase.name == "scheduling")
 
@@ -65,7 +65,7 @@ def plot_stability(
     """
 
     fig, (objects, packets) = plt.subplots(2, 1, figsize=(13, 7.5), sharex=True, height_ratios=(3, 2))
-    for index, (metric, label) in enumerate(_OBJECT_SPANS):
+    for index, (metric, label) in enumerate(OBJECT_SPANS):
         windows = _windows(connection, metric)
         if not windows:
             raise ValueError(f"cannot plot stability without {metric} samples")
@@ -75,7 +75,7 @@ def plot_stability(
     objects.legend(loc="upper right", fontsize=8)
     objects.grid(alpha=0.25)
 
-    available = _metrics(connection)
+    available = metric_names(connection)
     candidates = [
         ("rx_scheduling", f"RX {_QUEUING.label.lower()}"),
         (_rx_packet_metric(available), "RX processing"),
@@ -85,15 +85,15 @@ def plot_stability(
     for metric, label in candidates:
         if metric not in available:
             continue
-        _draw_windows(packets, _windows(connection, metric), label, len(_OBJECT_SPANS) + drawn)
+        _draw_windows(packets, _windows(connection, metric), label, len(OBJECT_SPANS) + drawn)
         drawn += 1
     if drawn == 0:
         raise ValueError("cannot plot stability without packet samples")
     packets.set_yscale("log")
-    _plain_log(packets.yaxis)
+    plain_log(packets.yaxis)
     packets.set_ylabel("Packet latency (µs, log)")
     packets.set_xlabel("Elapsed time (s)")
     packets.set_title("QUIC packets per second: solid p50, dashed p99")
     packets.legend(loc="upper right", fontsize=8, ncols=drawn)
     packets.grid(alpha=0.25)
-    _save(fig, path, f"Latency over the run | {subtitle}")
+    save_figure(fig, path, f"Latency over the run | {subtitle}")

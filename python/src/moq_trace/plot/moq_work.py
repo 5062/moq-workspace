@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Sequence
 
-from .common import PlotRun, _cdf_panels
+from .common import PlotRun, cdf_panels
 
 # The MoQ layer's own processing time, which compares stacks wherever they put
 # the MoQ boundary: phases record work only, and both work metrics exclude the
@@ -37,7 +37,7 @@ def plot_moq_work(
 ) -> bool:
     """Render MoQ processing cost, waits, and forwarding policy when any run has samples."""
 
-    return _cdf_panels(
+    return cdf_panels(
         path,
         f"{title} | {subtitle}",
         runs,

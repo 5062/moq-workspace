@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 
 from ..analysis import phases, sql
-from .common import _save
+from .common import save_figure
 
 
 @dataclasses.dataclass(frozen=True)
@@ -296,4 +296,5 @@ def plot_object_timelines(
         ha="center",
         fontsize=8,
     )
-    _save(fig, path, f"QUIC packet and MoQ object timelines | {subtitle}", title_size=14, rect=(0, 0.045, 1, 0.965))
+    title = f"QUIC packet and MoQ object timelines | {subtitle}"
+    save_figure(fig, path, title, title_size=14, rect=(0, 0.045, 1, 0.965))

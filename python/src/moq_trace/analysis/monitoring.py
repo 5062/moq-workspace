@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-import json
 import pathlib
 
 import duckdb
 
 from ..errors import TraceError
-from ..manifest import DeliverySample, MonitoringManifest, ResourceSample
+from ..manifest import (
+    MONITORING_SUMMARY,
+    DeliverySample,
+    DeliverySummary,
+    MonitoringManifest,
+    MonitoringSummary,
+    ResourceSample,
+    ResourceSummary,
+    ThreadSummary,
+)
 from . import sql
 from .artifact import open_artifact
 
@@ -190,16 +198,18 @@ def write_summary(path: pathlib.Path, database: pathlib.Path | None = None) -> N
 
 
 def _write_summary(connection: duckdb.DuckDBPyConnection, path: pathlib.Path, manifest: MonitoringManifest) -> None:
-    deliveries = _records(connection, "monitoring.delivery_summary")
     start_ns, end_ns = connection.execute("SELECT start_ns, end_ns FROM monitoring.window").fetchone()
-    summary = {
-        "schema_version": 2,
-        "window_seconds": (end_ns - start_ns) / 1e9,
-        "hosts": [host.model_dump() for host in manifest.hosts],
-        "resources": _records(connection, "monitoring.resource_summary"),
-        "threads": _records(connection, "monitoring.thread_summary"),
-        "deliveries": deliveries,
-        "total_goodput_bytes_per_second": (sum(row["bytes_per_second"] for row in deliveries) if deliveries else None),
-        "total_objects_per_second": sum(row["objects_per_second"] for row in deliveries) if deliveries else None,
-    }
-    path.with_name("monitoring-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    try:
+        deliveries = tuple(DeliverySummary(**row) for row in _records(connection, "monitoring.delivery_summary"))
+        summary = MonitoringSummary(
+            window_seconds=(end_ns - start_ns) / 1e9,
+            hosts=manifest.hosts,
+            resources=tuple(ResourceSummary(**row) for row in _records(connection, "monitoring.resource_summary")),
+            threads=tuple(ThreadSummary(**row) for row in _records(connection, "monitoring.thread_summary")),
+            deliveries=deliveries,
+            total_goodput_bytes_per_second=sum(row.bytes_per_second for row in deliveries) if deliveries else None,
+            total_objects_per_second=sum(row.objects_per_second for row in deliveries) if deliveries else None,
+        )
+    except ValueError as error:
+        raise TraceError(f"monitoring summary of {path} does not match its schema: {error}") from error
+    path.with_name(MONITORING_SUMMARY).write_text(summary.model_dump_json(indent=2) + "\n")

@@ -8,7 +8,7 @@ import duckdb
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
-from .common import PlotRun, _save
+from .common import PlotRun, save_figure
 
 
 def _intervals(axis: Axes, rows: list[tuple], column: int, label: str) -> None:
@@ -95,7 +95,7 @@ def plot_monitoring(path: pathlib.Path, subtitle: str, connection: duckdb.DuckDB
         else:
             axis.text(0.5, 0.5, "No samples covering this window", transform=axis.transAxes, ha="center", color="gray")
     objects.set_xlabel("Elapsed time on relay clock (s); remote alignment uncertainty in legends")
-    _save(fig, path, f"Resources and delivery | {subtitle}")
+    save_figure(fig, path, f"Resources and delivery | {subtitle}")
 
 
 def plot_monitoring_comparison(path: pathlib.Path, subtitle: str, runs: list[PlotRun]) -> None:
@@ -129,4 +129,4 @@ def plot_monitoring_comparison(path: pathlib.Path, subtitle: str, runs: list[Plo
         axis.set_title(title)
         axis.set_xticks(range(len(runs)), [run.label for run in runs], rotation=20, ha="right")
         axis.grid(axis="y", alpha=0.25)
-    _save(fig, path, f"Resources and delivery comparison | {subtitle}")
+    save_figure(fig, path, f"Resources and delivery comparison | {subtitle}")

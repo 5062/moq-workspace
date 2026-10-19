@@ -12,7 +12,7 @@ from matplotlib.patches import Patch
 
 from ..analysis import phases
 from ..analysis.phases import Phase
-from .common import PlotRun, _format_us, _plain_log, _quantile_box, _save
+from .common import PlotRun, format_us, plain_log, quantile_box, save_figure
 
 # Sections in pipeline order, each drawing the known phases of one subject and
 # direction. Phase rows sum every occurrence of the phase within one unit
@@ -65,7 +65,7 @@ def _row_summary(
     return tuple(max(float(value), _FLOOR_US) for value in summary[1])
 
 
-def _draw_phase_cdfs(axis: Axes, connection: duckdb.DuckDBPyConnection) -> None:
+def draw_phase_cdfs(axis: Axes, connection: duckdb.DuckDBPyConnection) -> None:
     """Draw one ECDF per processing phase on a log time axis.
 
     Only phases are drawn, not the spans that contain them, and each phase sums
@@ -89,7 +89,7 @@ def _draw_phase_cdfs(axis: Axes, connection: duckdb.DuckDBPyConnection) -> None:
     if drawn == 0:
         raise ValueError("cannot plot phase distributions without any phase samples")
     axis.set_xscale("log")
-    _plain_log(axis.xaxis)
+    plain_log(axis.xaxis)
     axis.set_xlabel("Duration (µs, log)")
     axis.set_ylabel("CDF")
     axis.set_ylim(0, 1.005)
@@ -123,10 +123,10 @@ def _draw_breakdown(axis: Axes, runs: Sequence[PlotRun]) -> None:
                 low, q1, median, q3, high = quantiles
                 center = y + (index - (len(runs) - 1) / 2) * band
                 color = f"C{index}"
-                _quantile_box(axis, quantiles, center, band * 0.8, color)
+                quantile_box(axis, quantiles, center, band * 0.8, color)
                 if single:
                     axis.annotate(
-                        f"{_format_us(median)} / {_format_us(high)}",
+                        f"{format_us(median)} / {format_us(high)}",
                         (1.01, center),
                         xycoords=("axes fraction", "data"),
                         va="center",
@@ -144,7 +144,7 @@ def _draw_breakdown(axis: Axes, runs: Sequence[PlotRun]) -> None:
     axis.tick_params(axis="y", length=0)
     axis.set_ylim(y - 0.4, -0.6)
     axis.set_xscale("log")
-    _plain_log(axis.xaxis)
+    plain_log(axis.xaxis)
     axis.set_xlabel(
         "Duration (µs, log)\nBox p25 to p75, black line p50, whiskers p1 to p99. "
         "TX MoQ payload write excludes transport work run inside the write."
@@ -178,4 +178,4 @@ def plot_breakdown(
     if len(runs) > 1:
         handles = [Patch(color=f"C{index}", label=run.label) for index, run in enumerate(runs)]
         axis.legend(handles=handles, loc="lower right", fontsize=8)
-    _save(fig, path, f"{title} | {subtitle}")
+    save_figure(fig, path, f"{title} | {subtitle}")
