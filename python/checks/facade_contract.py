@@ -16,7 +16,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2] / "moq-trace"
 def capture(binary: pathlib.Path, output: pathlib.Path) -> dict:
     """Record a fresh process, retaining every contract field except clocks and contexts."""
 
-    trace = asyncio.run(record(output, [[str(binary)]]))
+    # shortcut: a timed-out fixture process is left running; kill it in record() if hangs recur.
+    trace = asyncio.run(asyncio.wait_for(record(output, [[str(binary)]]), 30))
     rows = collections.defaultdict(list)
     for name, batch in ctf.batches(trace):
         for row in batch.to_pylist():
