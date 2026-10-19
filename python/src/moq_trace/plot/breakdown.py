@@ -18,17 +18,16 @@ from .common import PlotRun, format_us, plain_log, quantile_box, save_figure
 # direction. Phase rows sum every occurrence of the phase within one unit
 # (packet, object, or copy), because a phase that repeats per chunk only means
 # something as the unit's total. Spans that contain other rows, such as the
-# end-to-end latencies, are left out; `latency_cdf` shows those. Each section
-# keeps its CDF line style beside its rows, so colors can repeat while the phase
-# curves remain distinct. The TX payload write row excludes the transport work
-# a stack runs inside its write calls, which the TX QUIC rows already show.
-_SECTIONS: tuple[tuple[str, str, tuple[Phase, ...]], ...] = tuple(
-    (title, style, tuple(phase for phase in phases.select(subject, direction) if phase.drawn))
-    for title, style, subject, direction in (
-        ("RX QUIC", "-", "packet", "rx"),
-        ("RX MoQ", "--", "object", "rx"),
-        ("TX MoQ", "-.", "object", "tx"),
-        ("TX QUIC", ":", "packet", "tx"),
+# end-to-end latencies, are left out; `latency_cdf` shows those. The TX payload
+# write row excludes the transport work a stack runs inside its write calls,
+# which the TX QUIC rows already show.
+_SECTIONS: tuple[tuple[str, tuple[Phase, ...]], ...] = tuple(
+    (title, tuple(phase for phase in phases.select(subject, direction) if phase.drawn))
+    for title, subject, direction in (
+        ("RX QUIC", "packet", "rx"),
+        ("RX MoQ", "object", "rx"),
+        ("TX MoQ", "object", "tx"),
+        ("TX QUIC", "packet", "tx"),
     )
 )
 
@@ -65,39 +64,6 @@ def _row_summary(
     return tuple(max(float(value), _FLOOR_US) for value in summary[1])
 
 
-def draw_phase_cdfs(axis: Axes, connection: duckdb.DuckDBPyConnection) -> None:
-    """Draw one ECDF per processing phase on a log time axis.
-
-    Only phases are drawn, not the spans that contain them, and each phase sums
-    its occurrences within one packet, object, or copy, as in the breakdown.
-    """
-
-    drawn = 0
-    for section, style, rows in _SECTIONS:
-        color = 0
-        for row in rows:
-            query, parameters = _row_query(row)
-            values = [
-                max(float(value), _FLOOR_US)
-                for (value,) in connection.execute(f"SELECT us FROM ({query}) ORDER BY us", parameters).fetchall()
-            ]
-            if not values:
-                continue
-            axis.ecdf(values, color=f"C{color}", linestyle=style, label=f"{section} {row.label.lower()}")
-            color += 1
-            drawn += 1
-    if drawn == 0:
-        raise ValueError("cannot plot phase distributions without any phase samples")
-    axis.set_xscale("log")
-    plain_log(axis.xaxis)
-    axis.set_xlabel("Duration (µs, log)")
-    axis.set_ylabel("CDF")
-    axis.set_ylim(0, 1.005)
-    axis.set_title("Processing phases")
-    axis.grid(alpha=0.25)
-    axis.legend(fontsize=7, loc="center left", bbox_to_anchor=(1.01, 0.5))
-
-
 def _draw_breakdown(axis: Axes, runs: Sequence[PlotRun]) -> None:
     """Draw every present row as a quantile box per run on a log time axis."""
 
@@ -106,7 +72,7 @@ def _draw_breakdown(axis: Axes, runs: Sequence[PlotRun]) -> None:
     labels: list[str] = []
     y = 0.0
     single = len(runs) == 1
-    for section, _style, rows in _SECTIONS:
+    for section, rows in _SECTIONS:
         summaries = [(row, [_row_summary(run.connection, row, run.run_id) for run in runs]) for row in rows]
         summaries = [(row, values) for row, values in summaries if any(value is not None for value in values)]
         if not summaries:
@@ -171,7 +137,7 @@ def plot_breakdown(
 
     if not runs:
         raise ValueError("a breakdown figure requires at least one run")
-    rows = sum(len(rows) + 1 for _section, _style, rows in _SECTIONS)
+    rows = sum(len(rows) + 1 for _section, rows in _SECTIONS)
     fig, axis = plt.subplots(figsize=(12, 1.8 + rows * 0.24 * max(1, len(runs) ** 0.5)))
     _draw_breakdown(axis, runs)
     # Only a comparison needs a legend, to name the run behind each color.

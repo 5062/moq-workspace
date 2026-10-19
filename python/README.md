@@ -311,7 +311,7 @@ name and leaves any others in place.
 
 | Figure | Shows |
 |---|---|
-| `latency_cdf.png` | Object latency per copy for the wire span (with a packet capture), the QUIC+MoQ span, and the MoQ span, beside one CDF per processing phase |
+| `latency_cdf.png` | Object latency per copy for the wire span (with a packet capture), the QUIC+MoQ span, and the MoQ span |
 | `segments.png` | The widest span split into the segments between each layer's hand-off, as stacked means beside each segment's distribution |
 | `breakdown.png` | Each processing phase as a box of p25 to p75 with p1 to p99 whiskers, on a log time axis |
 | `moq_work.png` | MoQ RX and TX work per copy and the first write start after receipt; only when the provider emits object phases |

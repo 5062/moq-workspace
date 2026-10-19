@@ -9,7 +9,6 @@ import duckdb
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
-from .breakdown import draw_phase_cdfs
 from .common import (
     PlotRun,
     draw_distribution,
@@ -52,9 +51,9 @@ def plot_latency_cdf(
     subtitle: str,
     connection: duckdb.DuckDBPyConnection,
 ) -> None:
-    """Render per-copy object latency beside the distribution of each processing phase."""
+    """Render per-copy object latency for each span."""
 
-    fig, (ecdf, phases) = plt.subplots(1, 2, figsize=(15, 6))
+    fig, ecdf = plt.subplots(figsize=(9, 6))
     counts = []
     for index, (metric, label) in enumerate(object_spans("wire_full_span" in metric_names(connection))):
         values = metric_values_us(connection, metric)
@@ -64,7 +63,6 @@ def plot_latency_cdf(
         counts.append(len(values))
     _decorate_distribution(ecdf, None, min(counts))
     ecdf.set_title("Object latency")
-    draw_phase_cdfs(phases, connection)
     save_figure(fig, path, f"Latency CDF | {subtitle}")
 
 
