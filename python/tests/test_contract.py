@@ -13,6 +13,9 @@ from moq_trace.decode import ctf
 ROOT = pathlib.Path(__file__).resolve().parents[2] / "moq-trace"
 
 
+@unittest.skipUnless(
+    (ROOT / "crates").is_dir(), f"moq-trace submodule is not checked out at {ROOT}; run git submodule update --init"
+)
 class ProviderContractTests(unittest.TestCase):
     def test_provider_fields_types_and_enums_match_the_analyzer(self) -> None:
         for provider, events in ctf.PROVIDER_EVENTS.items():
