@@ -139,10 +139,13 @@ class ExperimentConfig(StrictModel):
     # derives throughput per direction from it, and decrypts it to check the trace
     # against the wire and measure each object from datagram to datagram.
     capture_packets: bool = False
-    # Point the relay at a qlog directory through `QLOGDIR`. Off by default: a
-    # relay that honors it serializes an event per packet, which costs relay CPU
-    # and so perturbs the latency being measured.
+    # Point the relay at a qlog directory through `QLOGDIR`, and append
+    # `relay_qlog_args`. Off by default: a relay that honors it serializes an
+    # event per packet, which costs relay CPU and so perturbs the latency being measured.
     qlog: bool = False
+    # Appended to `relay_args` only when `qlog` is on, for a relay that takes its
+    # qlog directory as an argument. Entries may also name `{qlog}`.
+    relay_qlog_args: tuple[str, ...] = ()
     monitor_resources: bool = True
     monitor_peers: bool = False
     monitor_goodput: bool = True

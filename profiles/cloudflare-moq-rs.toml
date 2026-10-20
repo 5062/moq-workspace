@@ -17,5 +17,7 @@ relay_args = [
   "--tls-cert", "{certificate}",
   "--tls-key", "{key}",
 ]
+# The relay reads its qlog directory from a flag rather than `QLOGDIR`.
+relay_qlog_args = ["--qlog-dir", "{qlog}"]
 relay_graceful_stop = false
 transport_profile = "quinn"

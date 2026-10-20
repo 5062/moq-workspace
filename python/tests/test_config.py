@@ -221,6 +221,16 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(relay[4], "actual/relay.crt")
         self.assertEqual(relay[6], PROTOCOL)
 
+    def test_qlog_arguments_follow_the_qlog_switch(self) -> None:
+        config = ExperimentConfig(
+            protocol=PROTOCOL, output=pathlib.Path("run"), relay_args=("--x",), relay_qlog_args=("--qlog-dir", "{qlog}")
+        )
+        placement = placement_for(config, pathlib.Path("actual"))
+        self.assertEqual(commands(config, placement).relay[1:], ("--x",))
+
+        config = config.model_copy(update={"qlog": True})
+        self.assertEqual(commands(config, placement).relay[1:], ("--x", "--qlog-dir", "actual/qlog"))
+
     def test_readiness_gauges_match_whole_values(self) -> None:
         connected = experiment._gauge("connections", 1)
         self.assertTrue(connected("INFO stats connections=1 subscriptions=0"))

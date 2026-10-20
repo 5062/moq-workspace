@@ -72,9 +72,11 @@ def _relay(config: ExperimentConfig, placement: Placement) -> list[str]:
         "output": directory,
         "certificate": f"{directory}/{tls.CERTIFICATE}",
         "key": f"{directory}/{tls.KEY}",
+        "qlog": f"{directory}/qlog",
     }
+    arguments = (*config.relay_args, *config.relay_qlog_args) if config.qlog else config.relay_args
     try:
-        relay = [placement.relay_binary(), *(argument.format_map(values) for argument in config.relay_args)]
+        relay = [placement.relay_binary(), *(argument.format_map(values) for argument in arguments)]
     except KeyError as error:
         raise CaptureError(f"unknown relay argument placeholder: {error.args[0]}") from error
     if config.relay_cpu is not None:

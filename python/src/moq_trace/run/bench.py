@@ -39,6 +39,7 @@ LAUNCH_KEYS = frozenset(
         "relay_ready_log",
         "relay_startup_seconds",
         "relay_graceful_stop",
+        "relay_qlog_args",
         "relay_url",
         "transport_profile",
     }
