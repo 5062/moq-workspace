@@ -17,6 +17,7 @@ from moq_trace.plot import (
     plot_latency_cdf,
     plot_latency_comparison,
     plot_moq_work,
+    plot_processing,
     plot_segments,
     plot_stability,
     plot_transport_waits,
@@ -24,6 +25,7 @@ from moq_trace.plot import (
 )
 from moq_trace.plot.breakdown import _row_summary
 from moq_trace.plot.common import copy_rows, draw_distribution
+from moq_trace.plot.processing import _per_object_us
 from moq_trace.plot.render import _describe
 from moq_trace.plot.segments import _segments
 
@@ -223,6 +225,25 @@ class RunPlotTests(unittest.TestCase):
                 output = pathlib.Path(directory) / "moq_work.png"
                 self.assertFalse(plot_moq_work(output, "MoQ work", SUBTITLE, (PlotRun("", connection),)))
                 self.assertFalse(output.exists())
+        finally:
+            connection.close()
+
+
+class ProcessingPlotTests(unittest.TestCase):
+    def test_work_is_charged_per_inbound_object_and_waits_are_left_out(self) -> None:
+        connection = _artifact(packet_phases=True)
+        try:
+            run = PlotRun("", connection)
+            # Two inbound objects: 8 µs of commits and 1 µs of clones, 1 µs of
+            # encryption; the 4 µs scheduling wait is not stacked.
+            self.assertEqual(_per_object_us(run), {("object", "routing"): 4.5, ("packet", "crypto"): 0.5})
+            with tempfile.TemporaryDirectory() as directory:
+                output = pathlib.Path(directory) / "processing.png"
+                self.assertTrue(plot_processing(output, "title", SUBTITLE, (run, run)))
+                self.assertGreater(output.stat().st_size, 0)
+                connection.execute("DELETE FROM metrics.phase_totals WHERE subject = 'object'")
+                self.assertIsNone(_per_object_us(run))
+                self.assertFalse(plot_processing(output.with_name("none.png"), "title", SUBTITLE, (run,)))
         finally:
             connection.close()
 

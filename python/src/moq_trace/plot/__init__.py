@@ -8,7 +8,8 @@ starts forwarding, and `transport_waits` how long the transport then held each
 copy's bytes and why. `stability` shows whether latency drifts or stalls over the run,
 and lines packet stalls up under object stalls. `network` shows what the network
 did meanwhile. `object_timeline` drills into single objects. The comparison
-figures repeat the first four across runs.
+figures repeat the first four across runs, and `processing` stacks each run's
+work per inbound object by layer and category, so a sweep shows how it scales.
 
 Each figure lives in its own module. This package re-exports only the figures
 and the types that describe a run, so callers never depend on that layout.
@@ -25,6 +26,7 @@ from .common import PlotRun  # noqa: E402
 from .latency import plot_latency_cdf, plot_latency_comparison  # noqa: E402
 from .moq_work import plot_moq_work  # noqa: E402
 from .network import plot_network  # noqa: E402
+from .processing import plot_processing  # noqa: E402
 from .segments import plot_segments  # noqa: E402
 from .stability import plot_stability  # noqa: E402
 from .timeline import plot_object_timelines  # noqa: E402
@@ -38,6 +40,7 @@ __all__ = [
     "plot_moq_work",
     "plot_network",
     "plot_object_timelines",
+    "plot_processing",
     "plot_segments",
     "plot_stability",
     "plot_transport_waits",

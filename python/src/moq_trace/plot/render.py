@@ -19,6 +19,7 @@ from . import (
     plot_moq_work,
     plot_network,
     plot_object_timelines,
+    plot_processing,
     plot_segments,
     plot_stability,
     plot_transport_waits,
@@ -121,6 +122,7 @@ def _render_comparison(
     plot_segments(plots / f"{prefix}_segments.png", f"Span segments by {dimension}", subtitle, runs)
     plot_breakdown(plots / f"{prefix}_breakdown.png", f"Where the time goes by {dimension}", subtitle, runs)
     plot_moq_work(plots / f"{prefix}_moq_work.png", f"MoQ work by {dimension}", subtitle, runs)
+    plot_processing(plots / f"{prefix}_processing.png", f"Processing per object by {dimension}", subtitle, runs)
     plot_transport_waits(plots / f"{prefix}_transport_waits.png", f"Transport waits by {dimension}", subtitle, runs)
     if any(summary.monitoring for summary in summaries):
         plot_monitoring_comparison(plots / f"{prefix}_monitoring.png", subtitle, runs)
