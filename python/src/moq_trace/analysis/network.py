@@ -26,7 +26,7 @@ from collections.abc import Callable, Iterator
 import duckdb
 import pyarrow as pa
 
-from ..decode import pcap
+from ..decode import pcap, quic
 from ..errors import TraceError
 from ..manifest import NetworkManifest
 from ..metadata import NetworkCapabilities
@@ -109,8 +109,9 @@ def _qlog_records(path: pathlib.Path) -> Iterator[dict]:
 def read_qlog(path: pathlib.Path) -> Iterator[tuple[int, str, str, dict]]:
     """Yield `(monotonic_ns, connection, event_name, data)` for every qlog event.
 
-    Events are keyed by `group_id`, which Quinn sets to the connection's original
-    destination connection ID, so one file may describe several connections.
+    Events are keyed by `group_id`, which Quinn sets to the peer's original
+    connection ID (a client's source ID, at the relay), so one file may
+    describe several connections.
     RTT fields in `recovery:metrics_updated` are normalized to milliseconds.
     """
 
@@ -163,6 +164,16 @@ _RECOVERY_COLUMNS = pa.schema(
         ("bytes_in_flight", pa.int64()),
     ]
 )
+_RECEIVE_COLUMNS = pa.schema(
+    [
+        ("monotonic_ns", pa.int64()),
+        ("connection", pa.string()),
+        ("packet_space", pa.string()),
+        ("packet_number", pa.uint64()),
+    ]
+)
+# qlog packet types that carry a packet number, by the decoder's space name.
+_QLOG_SPACES = {"initial": quic.INITIAL, "handshake": quic.HANDSHAKE, "0RTT": quic.ZERO_RTT, "1RTT": quic.DATA}
 _LOSS_COLUMNS = pa.schema(
     [
         ("elapsed_ns", pa.int64()),
@@ -267,7 +278,10 @@ def _ingest_qlog(
     manifest: NetworkManifest,
     root: pathlib.Path,
     origin_ns: int,
+    wire: bool,
 ) -> int:
+    """Load the relay's qlog, and with `wire`, join its receives to the decrypted capture."""
+
     files = []
     if manifest.qlog_dir is not None and (root / manifest.qlog_dir).is_dir():
         files = sorted(path for path in (root / manifest.qlog_dir).iterdir() if path.is_file())
@@ -276,12 +290,17 @@ def _ingest_qlog(
     first_seen: dict[str, int] = {}
     recovery = sql.Rows(connection, "network.recovery", _RECOVERY_COLUMNS)
     losses = sql.Rows(connection, "network.losses", _LOSS_COLUMNS)
+    receives = sql.Rows(connection, "qlog_receives", _RECEIVE_COLUMNS)
     for path in files:
         for monotonic_ns, key, name, data in read_qlog(path):
             first_seen.setdefault(key, monotonic_ns)
             elapsed_ns = monotonic_ns - origin_ns
             if name == "transport:packet_received":
                 received[key] = received.get(key, 0) + 1
+                header = data.get("header") or {}
+                space = _QLOG_SPACES.get(header.get("packet_type"))
+                if wire and space is not None and header.get("packet_number") is not None:
+                    receives.append((monotonic_ns, key, space, header["packet_number"]))
             elif name == "transport:packet_sent":
                 sent[key] = sent.get(key, 0) + 1
             elif name == "recovery:metrics_updated":
@@ -304,8 +323,19 @@ def _ingest_qlog(
                 losses.append((elapsed_ns, key, header.get("packet_number"), header.get("length"), data.get("trigger")))
     recovery.flush()
     losses.flush()
+    receives.flush()
+    if wire:
+        connection.execute(sql.read("network/receive-waits"), {"origin": origin_ns})
     roles = _roles(received, sent, first_seen, numbered=True)
-    _assign_roles(connection, (("network.recovery", "connection"), ("network.losses", "connection")), roles)
+    _assign_roles(
+        connection,
+        (
+            ("network.recovery", "connection"),
+            ("network.losses", "connection"),
+            ("network.receive_waits", "connection"),
+        ),
+        roles,
+    )
     return len(roles)
 
 
@@ -321,7 +351,7 @@ def ingest(
     `root` is the directory the manifest's paths are relative to. Every table
     measures `elapsed_ns` from `origin_ns`, the trace instant the latency
     samples are measured from, so network and latency figures share one axis.
-    Datagrams and losses before the origin are dropped. Recovery updates before
+    Datagrams, losses, and receive waits before the origin are dropped. Recovery updates before
     it are kept at negative times, because their values hold until the next
     update.
 
@@ -347,7 +377,8 @@ def ingest(
         else:
             wire_packets = decrypt(datagrams)
         throughput.store()
-    qlog_connections = _ingest_qlog(connection, manifest, root, origin_ns)
+    wire = manifest.pcap is not None and decrypt is not None
+    qlog_connections = _ingest_qlog(connection, manifest, root, origin_ns, wire)
     return NetworkCapabilities(
         packets=manifest.pcap is not None, wire_packets=wire_packets, qlog_connections=qlog_connections
     )

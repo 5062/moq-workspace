@@ -12,6 +12,9 @@ CREATE TABLE network.wire_connections (
     -- Trace-clock times of the connection's first and last captured datagram.
     first_ns BIGINT NOT NULL,
     last_ns BIGINT NOT NULL,
+    -- The peer's connection ID from the first client Initial, in hex: the
+    -- client's source ID when the peer is the client, else the destination ID.
+    original_remote_cid VARCHAR NOT NULL,
     trace_connection_id UBIGINT
 );
 

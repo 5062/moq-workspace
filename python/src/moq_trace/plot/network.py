@@ -89,11 +89,12 @@ def plot_network(
 
     Throughput comes from the packet capture. RTT, lost packets, and congestion
     window come from the relay's qlog, which is the relay's own view of each
-    connection. A panel whose source was not captured says so instead of
+    connection. Receive wait joins the two: how long each received packet sat
+    between its capture and the relay's QUIC stack reading it. A panel whose source was not captured says so instead of
     disappearing, so a missing measurement is never read as a clean network.
     """
 
-    fig, (throughput, rtt, loss, window) = plt.subplots(4, 1, figsize=(13, 12), sharex=True)
+    fig, (throughput, rtt, wait, loss, window) = plt.subplots(5, 1, figsize=(13, 15), sharex=True)
     if packets:
         # A trace analyzed by hand records no frame rate, so it gets no reference line.
         payload_mbps = None if workload.fps is None else workload.fps * workload.object_size * 8 / 1e6
@@ -186,7 +187,30 @@ def plot_network(
             loss.legend(loc="upper right", fontsize=8)
         else:
             _no_data(loss, "Losses occurred only on connections not shown")
-    for axis in (throughput, rtt, loss, window):
+    waited = False
+    for label, role_filter, color in (
+        ("publisher", "role = 'publisher'", "C0"),
+        ("subscribers", "role <> 'publisher'", "C3"),
+    ):
+        rows = connection.execute(
+            f"""SELECT floor(elapsed_ns / 1e8) / 10 AS second, median(wait_ns) / 1e6, max(wait_ns) / 1e6
+                FROM network.receive_waits WHERE {role_filter} GROUP BY second ORDER BY second"""
+        ).fetchall()
+        if not rows:
+            continue
+        waited = True
+        seconds = [second for second, _median, _peak in rows]
+        wait.step(seconds, [median for _second, median, _peak in rows], where="post", color=color, label=label)
+        wait.step(seconds, [peak for _second, _median, peak in rows], where="post", color=color, linestyle="--")
+    wait.set_title("Receive wait at the relay, qlog receive minus capture time: solid median, dashed max per 100 ms")
+    wait.set_ylabel("Wait (ms)")
+    if waited:
+        wait.legend(loc="upper left", fontsize=8)
+    elif packets and qlog:
+        _no_data(wait, "No qlog receive matched a decrypted captured packet")
+    else:
+        _no_data(wait, "Needs both the decrypted packet capture and the relay's qlog")
+    for axis in (throughput, rtt, wait, loss, window):
         axis.grid(alpha=0.25)
     if packets:
         stats = connection.execute("SELECT kernel_drops, interface_drops FROM network.capture_statistics").fetchone()

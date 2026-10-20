@@ -240,7 +240,12 @@ class IngestTests(unittest.TestCase):
             for tick in range(40):
                 time_ms = 1_000 + tick * 100
                 events += [
-                    {"time": time_ms, "name": "transport:packet_received", "group_id": "pub", "data": {}},
+                    {
+                        "time": time_ms,
+                        "name": "transport:packet_received",
+                        "group_id": "pub",
+                        "data": {"header": {"packet_type": "1RTT", "packet_number": tick}},
+                    },
                     {"time": time_ms, "name": "transport:packet_sent", "group_id": "sub", "data": {}},
                     {
                         "time": time_ms,
@@ -271,8 +276,29 @@ class IngestTests(unittest.TestCase):
             )
 
             connection = duckdb.connect(":memory:")
+
+            def decrypt(datagrams) -> int:
+                # Stands in for the decrypted capture: the publisher's packet
+                # `tick` was captured 5 ms before the relay's qlog received it.
+                for _ in datagrams:
+                    pass
+                connection.execute(
+                    """CREATE TABLE network.wire_connections (connection UINTEGER, original_remote_cid VARCHAR);
+                       INSERT INTO network.wire_connections VALUES (0, 'pub');
+                       CREATE TABLE network.wire_packets (connection UINTEGER, direction VARCHAR,
+                           timestamp_ns BIGINT, packet_space VARCHAR, packet_number UBIGINT);
+                       INSERT INTO network.wire_packets
+                       SELECT 0, 'rx', $origin + tick * 100_000_000 - 5_000_000, 'data', tick FROM range(40) t(tick)""",
+                    {"origin": origin_ns},
+                )
+                return 40
+
             try:
-                capabilities = network.ingest(connection, read_manifest(manifest), root, origin_ns)
+                capabilities = network.ingest(connection, read_manifest(manifest), root, origin_ns, decrypt)
+                waits = connection.execute(
+                    """SELECT role, count(*), min(wait_ns), max(wait_ns), min(elapsed_ns)
+                       FROM network.receive_waits GROUP BY role"""
+                ).fetchall()
                 roles = connection.execute(
                     "SELECT direction, role, min(elapsed_ns) FROM network.datagrams GROUP BY ALL ORDER BY ALL"
                 ).fetchall()
@@ -295,6 +321,8 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(roles, [("egress", "subscriber", 0), ("ingress", "publisher", 0)])
         self.assertEqual(rtt, [("subscriber 1", 1_000_000.0, 0)])
         self.assertEqual(loss, [("subscriber 1", 1_000_000_000, 7)])
+        # Packet 0 was captured before the origin, so it has no wait.
+        self.assertEqual(waits, [("publisher", 39, 5_000_000, 5_000_000, 95_000_000)])
         self.assertEqual(recovery_types["min_rtt_ns"], "DOUBLE")
         self.assertEqual(recovery_types["bytes_in_flight"], "BIGINT")
 

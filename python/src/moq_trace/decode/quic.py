@@ -283,6 +283,10 @@ class Connection:
     initial: dict[str, Keys]
     first_ns: int
     last_ns: int
+    # The peer's connection ID as the relay first saw it: the client's source
+    # ID when the peer is the client, else the client's original destination
+    # ID. Quinn's qlog names the connection by it.
+    original_remote_cid: bytes
     suite: Suite | None = None
     client_random: bytes | None = None
     handshake: dict[str, Keys] = dataclasses.field(default_factory=dict)
@@ -468,6 +472,7 @@ class Decryptor:
                 cids={SERVER: {dcid}},
                 first_ns=timestamp_ns,
                 last_ns=timestamp_ns,
+                original_remote_cid=scid if from_peer else dcid,
             )
             new_connection = True
         elif connection is None:
