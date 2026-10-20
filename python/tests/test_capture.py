@@ -31,6 +31,19 @@ class PacketCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(argv[argv.index("-w") + 1], "/tmp/capture/relay.pcap")
         self.assertEqual(argv[argv.index("-Z") + 1], "me")
 
+    def test_relay_socket_drops_sum_every_socket_on_its_port(self) -> None:
+        header = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout"
+        header += " inode ref pointer drops\n"
+        rest = "07 00000000:00000000 00:00000000 00000000 1000 0 11 2 0000000000000000"
+        v6 = "00000000000000000000000000000000"
+        tables = (
+            f"{header} 1: 0100007F:115B 00000000:0000 {rest} 3\n 2: 0100007F:0035 00000000:0000 {rest} 9\n"
+            f"{header} 1: {v6}:115B {v6}:0000 {rest} 490\n"
+        )
+        self.assertEqual(capture.udp_drops(tables, 4443), 493)
+        with self.assertRaisesRegex(CaptureError, "no UDP socket is bound to port 4444"):
+            capture.udp_drops(tables, 4444)
+
 
 class CaptureTests(unittest.IsolatedAsyncioTestCase):
     """Run the capture with local stand-in roles and recorded remote hosts."""
@@ -167,7 +180,11 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
             return tcpdump_process
 
         config = self._config(trace=False, capture_packets=True)
-        with mock.patch.object(capture, "start_packet_capture", side_effect=start) as start_capture:
+        # The stand-in relay binds no socket, so its drop count is supplied.
+        with (
+            mock.patch.object(capture, "start_packet_capture", side_effect=start) as start_capture,
+            mock.patch.object(capture, "udp_drops", return_value=7) as udp_drops,
+        ):
             where, _ = await self._capture(config)
 
         host, directory, port, _log = start_capture.call_args.args
@@ -178,6 +195,7 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         manifest = read_manifest(config.output / MANIFEST)
         self.assertEqual((manifest.pcap, manifest.capture_log), ("relay.pcap", "tcpdump.log"))
         self.assertEqual(manifest.key_logs, ("subscriber.keylog", "publisher.keylog"))
+        self.assertEqual((udp_drops.call_args.args[1], manifest.relay_socket_drops), (config.port, 7))
 
     async def test_peers_log_their_tls_secrets_beside_a_packet_capture(self) -> None:
         tcpdump_process = mock.Mock()
@@ -195,7 +213,10 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         # Each peer reports where it was told to write its key log.
         subscriber = ("sh", "-c", "echo keylog=$SSLKEYLOGFILE; " + " ".join(command_set().subscriber[2:]))
         publisher = ("sh", "-c", "echo keylog=$SSLKEYLOGFILE; " + " ".join(command_set().publisher[2:]))
-        with mock.patch.object(capture, "start_packet_capture", side_effect=start):
+        with (
+            mock.patch.object(capture, "start_packet_capture", side_effect=start),
+            mock.patch.object(capture, "udp_drops", return_value=0),
+        ):
             where, _ = await self._capture(config, command_set(subscriber=subscriber, publisher=publisher))
 
         remote = where.directory(where.subscriber)

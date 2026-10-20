@@ -191,7 +191,12 @@ def ingest(
     _join_connections(connection, decryptor.connections)
     connection.execute(sql.read("wire/join"))
     tolerance = manifest.realtime_offset_uncertainty_ns + _CLOCK_STEP_NS
-    sql.check(connection, "wire/checks", {"tolerance": tolerance}, "the packet capture disagrees with the trace: ")
+    sql.check(
+        connection,
+        "wire/checks",
+        {"tolerance": tolerance, "socket_drops": manifest.relay_socket_drops or 0},
+        "the packet capture disagrees with the trace: ",
+    )
     coverage.resolve(connection, "wire/coverage-source", "network.wire_coverage")
     sql.check(
         connection, "wire/coverage-checks", context="the packet capture disagrees with the trace on object coverage: "

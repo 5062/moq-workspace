@@ -295,7 +295,8 @@ class WireTests(unittest.TestCase):
                 try:
                     connection.execute(f"INSERT INTO {table} SELECT * FROM {table} LIMIT 1")
                     with self.assertRaisesRegex(TraceError, f"{defect}: 1"):
-                        sql.check(connection, check, {"tolerance": 0} if check == "wire/checks" else None)
+                        parameters = {"tolerance": 0, "socket_drops": 0} if check == "wire/checks" else None
+                        sql.check(connection, check, parameters)
                 finally:
                     connection.execute("ROLLBACK")
 
@@ -308,8 +309,22 @@ class WireTests(unittest.TestCase):
     def test_a_wire_packet_without_a_trace_packet_is_rejected(self) -> None:
         self.datagram(200_000, PUBLISHER, True, self.publisher.short(quic.CLIENT, 2, b"\x01"))
         self.prepare()
-        with self.assertRaisesRegex(TraceError, "wire packets without a trace packet: 1"):
+        with self.assertRaisesRegex(TraceError, "RX wire datagrams without a trace packet beyond .* drops: 1"):
             self.ingest()
+
+    def test_rx_datagrams_the_relay_socket_dropped_are_accepted_up_to_its_drop_count(self) -> None:
+        # The publisher's object was captured, then dropped by the relay's full
+        # receive buffer, so only the traced copy that follows covers it.
+        self.datagram(85_000, PUBLISHER, True, self.publisher.short(quic.CLIENT, 2, _stream(10, 0, b"x" * 16)))
+        self.prepare()
+        self.ingest(relay_socket_drops=1)
+        self.assertEqual(
+            self.trace.connection.execute(
+                "SELECT count(*) FROM network.wire_packets WHERE direction = 'rx' AND trace_id IS NULL "
+                "AND timestamp_ns BETWEEN 80000 AND 400000"
+            ).fetchone(),
+            (1,),
+        )
 
     def test_a_dropped_tx_packet_that_left_is_rejected(self) -> None:
         self.trace.connection.execute("UPDATE raw.quic_packet_end SET outcome = 'dropped' WHERE trace_id = 4")

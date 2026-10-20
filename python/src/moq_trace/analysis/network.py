@@ -363,7 +363,10 @@ def ingest(
     connection.execute(sql.read("network/schema"))
     if manifest.capture_log is not None:
         statistics = capture_statistics(root / manifest.capture_log)
-        connection.execute("INSERT INTO network.capture_statistics VALUES (?, ?, ?, ?)", list(statistics.values()))
+        connection.execute(
+            "INSERT INTO network.capture_statistics VALUES (?, ?, ?, ?, ?)",
+            [*statistics.values(), manifest.relay_socket_drops],
+        )
     wire_packets = 0
     if manifest.pcap is not None:
         throughput = _Throughput(connection, manifest.realtime_offset_ns, origin_ns)

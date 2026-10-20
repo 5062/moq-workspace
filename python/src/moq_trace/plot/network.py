@@ -213,9 +213,14 @@ def plot_network(
     for axis in (throughput, rtt, wait, loss, window):
         axis.grid(alpha=0.25)
     if packets:
-        stats = connection.execute("SELECT kernel_drops, interface_drops FROM network.capture_statistics").fetchone()
+        stats = connection.execute(
+            "SELECT kernel_drops, interface_drops, relay_socket_drops FROM network.capture_statistics"
+        ).fetchone()
         if stats is not None:
-            kernel, interface = stats
+            kernel, interface, socket = stats
             interface_text = interface if interface is not None else "unknown"
-            subtitle += f" | capture drops: kernel {kernel}, interface {interface_text}"
+            socket_text = socket if socket is not None else "unknown"
+            # The run's settings already fill one line, so the drop counts get their own.
+            subtitle += f"\ncapture drops: kernel {kernel}, interface {interface_text}"
+            subtitle += f" | relay socket drops {socket_text}"
     save_figure(fig, path, f"Network during the run | {subtitle}")

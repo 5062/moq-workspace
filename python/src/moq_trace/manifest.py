@@ -114,6 +114,10 @@ class NetworkManifest(BaseModel):
     # The TLS key logs of the peers, which decrypt the capture.
     key_logs: tuple[str, ...] = ()
     qlog_dir: str | None = None
+    # Datagrams the kernel dropped at the relay's UDP sockets, chiefly because a
+    # receive buffer was full, read after the peers stopped. The capture holds
+    # these datagrams although the relay never received them.
+    relay_socket_drops: int | None = Field(default=None, ge=0)
 
 
 def read_manifest(path: pathlib.Path) -> NetworkManifest:

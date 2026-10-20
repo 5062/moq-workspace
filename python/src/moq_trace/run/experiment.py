@@ -92,6 +92,7 @@ async def _capture(config: ExperimentConfig, command: CommandSet, placement: Pla
         _log.info("workload finished; stopping the subscriber, publisher and relay")
         await subscriber.stop(True)
         await publisher.stop(True)
+        await capture.sample_socket_drops()
         await relay.stop(config.relay_graceful_stop)
         return await capture.finish()
 

@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from ..analysis.network import capture_statistics
 from ..capture.hosts import Clock, Host, Process
 from ..capture.lttng import LttngSession
+from ..errors import CaptureError
 from ..manifest import MANIFEST, QLOG_ENVIRONMENT, NetworkManifest
 from . import tls
 from .config import ExperimentConfig
@@ -45,8 +46,32 @@ def _key_log(role: str) -> str:
     return f"{role}.keylog"
 
 
+def udp_drops(tables: str, port: int) -> int:
+    """Sum the `drops` column of the sockets bound to `port` in `/proc/net/udp` and `udp6` text.
+
+    The kernel counts a datagram there when it cannot queue it on the socket,
+    chiefly because the socket's receive buffer is full.
+    """
+
+    drops = None
+    for line in tables.splitlines():
+        fields = line.split()
+        if len(fields) != 13 or fields[0] == "sl":
+            continue
+        if int(fields[1].rsplit(":", 1)[1], 16) == port:
+            drops = (drops or 0) + int(fields[12])
+    if drops is None:
+        raise CaptureError(f"no UDP socket is bound to port {port}")
+    return drops
+
+
 async def _network_manifest(
-    config: ExperimentConfig, output: pathlib.Path, relay: Host, start: Clock, roles: Sequence[str]
+    config: ExperimentConfig,
+    output: pathlib.Path,
+    relay: Host,
+    start: Clock,
+    roles: Sequence[str],
+    socket_drops: int | None,
 ) -> pathlib.Path:
     """Describe the run's network capture so analysis can place it on the trace clock.
 
@@ -66,6 +91,7 @@ async def _network_manifest(
         capture_log="tcpdump.log" if config.capture_packets else None,
         key_logs=tuple(_key_log(role) for role in roles) if config.capture_packets else (),
         qlog_dir="qlog" if config.qlog else None,
+        relay_socket_drops=socket_drops,
     )
     path = output / MANIFEST
     path.write_text(manifest.model_dump_json(indent=2) + "\n")
@@ -88,6 +114,7 @@ class CaptureSession:
         self.cleanup = contextlib.AsyncExitStack()
         self.session: LttngSession | None = None
         self.tcpdump: Process | None = None
+        self.socket_drops: int | None = None
         self.tracked: list[int] = []
         self.relay_pid = 0
         self.roles: dict[str, Process] = {}
@@ -170,6 +197,17 @@ class CaptureSession:
         self.relay_pid = relay_pid
         self.tracked.append(relay_pid)
 
+    async def sample_socket_drops(self) -> None:
+        """Read the relay socket's kernel drops once the peers stop and before the relay does.
+
+        The count lives only as long as the socket, and once the peers stop no
+        datagram reaches it, so this is every drop the capture can contain.
+        """
+
+        if self.tcpdump is not None:
+            tables = await self.relay.run("cat /proc/net/udp; cat /proc/net/udp6 2>/dev/null || true")
+            self.socket_drops = udp_drops(tables, self.config.port)
+
     async def finish(self) -> Capture:
         """Finalize and collect recording files after workload processes stop."""
 
@@ -192,7 +230,7 @@ class CaptureSession:
             for role in roles:
                 host = self.placement.host(role)
                 await host.fetch(self.placement.directory(host), [_key_log(role)], self.output)
-        manifest = await _network_manifest(self.config, self.output, self.relay, self.clock, roles)
+        manifest = await _network_manifest(self.config, self.output, self.relay, self.clock, roles, self.socket_drops)
         return Capture(
             trace=None if self.session is None else self.output / "trace",
             relay_pid=self.relay_pid,

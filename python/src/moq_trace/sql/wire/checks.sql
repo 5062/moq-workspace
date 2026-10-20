@@ -11,9 +11,18 @@ WHERE trace.outcome = 'success'
   AND trace.start_ns BETWEEN (SELECT start_ns FROM model.window) AND (SELECT end_ns FROM model.window)
   AND NOT EXISTS (SELECT 1 FROM network.wire_packets AS wire WHERE wire.trace_id = trace.trace_id)
 UNION ALL
-SELECT 'wire packets without a trace packet', count(*)
+SELECT 'TX wire packets without a trace packet', count(*)
 FROM network.wire_packets
-WHERE trace_id IS NULL
+WHERE trace_id IS NULL AND direction = 'tx'
+  AND timestamp_ns BETWEEN (SELECT start_ns FROM model.window) AND (SELECT end_ns FROM model.window)
+UNION ALL
+-- The capture sees a datagram before the relay's socket does, so a datagram the
+-- kernel dropped there is on the wire but never in the trace. Only as many RX
+-- datagrams as the socket dropped may go untraced.
+SELECT 'RX wire datagrams without a trace packet beyond the relay socket''s kernel drops',
+       greatest(count(DISTINCT datagram) - $socket_drops, 0)
+FROM network.wire_packets
+WHERE trace_id IS NULL AND direction = 'rx'
   AND timestamp_ns BETWEEN (SELECT start_ns FROM model.window) AND (SELECT end_ns FROM model.window)
 UNION ALL
 SELECT 'trace packets matched by more than one wire packet', count(*)
