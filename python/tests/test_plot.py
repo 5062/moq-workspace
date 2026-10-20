@@ -239,7 +239,11 @@ class ProcessingPlotTests(unittest.TestCase):
             self.assertEqual(_per_object_us(run), {("object", "routing"): 4.5, ("packet", "crypto"): 0.5})
             with tempfile.TemporaryDirectory() as directory:
                 output = pathlib.Path(directory) / "processing.png"
-                self.assertTrue(plot_processing(output, "title", SUBTITLE, (run, run)))
+                self.assertTrue(
+                    plot_processing(
+                        output, "title", SUBTITLE, (run, run), axis_title="Subscribers", ticks=("50", "100")
+                    )
+                )
                 self.assertGreater(output.stat().st_size, 0)
                 connection.execute("DELETE FROM metrics.phase_totals WHERE subject = 'object'")
                 self.assertIsNone(_per_object_us(run))

@@ -21,6 +21,9 @@ _SEGMENTS = (
 )
 _COLORS = [plt.get_cmap("tab20c")(index) for index in (0, 1, 2, 4, 5)]
 
+# A block shorter than this share of the tallest bar has no room for its value inside.
+_LABEL_SHARE = 0.03
+
 _CATEGORY = {(phase.subject, phase.direction, phase.name): phase.category for phase in phases.PHASES}
 
 
@@ -54,23 +57,57 @@ def _per_object_us(run: PlotRun) -> dict[tuple[str, str], float] | None:
     return sums
 
 
-def plot_processing(path: pathlib.Path, title: str, subtitle: str, runs: Sequence[PlotRun]) -> bool:
-    """Render one stacked bar per run when any run has object phases to normalize by."""
+def plot_processing(
+    path: pathlib.Path,
+    title: str,
+    subtitle: str,
+    runs: Sequence[PlotRun],
+    *,
+    axis_title: str | None = None,
+    ticks: Sequence[str] | None = None,
+) -> bool:
+    """Render one stacked bar per run when any run has object phases to normalize by.
+
+    `ticks` label the bars in place of the run labels, such as a sweep's bare values under `axis_title`.
+    """
 
     if not runs:
         raise ValueError("a processing figure requires at least one run")
     bars = [_per_object_us(run) for run in runs]
     if all(bar is None for bar in bars):
         return False
-    fig, axis = plt.subplots(figsize=(max(6.0, 1.2 * len(runs) + 3), 5))
+    fig, axis = plt.subplots(figsize=(max(10.0, 1.2 * len(runs) + 3), 6))
     positions = range(len(runs))
     bottoms = [0.0] * len(runs)
+    blocks = []
     for (subject, category, label), color in zip(_SEGMENTS, _COLORS, strict=True):
         heights = [0.0 if bar is None else bar.get((subject, category), 0.0) for bar in bars]
         if not any(heights):
             continue
-        axis.bar(positions, heights, 0.6, bottom=bottoms, label=label, color=color)
+        blocks.append((axis.bar(positions, heights, 0.6, bottom=bottoms, label=label, color=color), heights))
         bottoms = [bottom + height for bottom, height in zip(bottoms, heights, strict=True)]
+    tallest = max(bottoms)
+    gap = _LABEL_SHARE * tallest
+    # The height of each bar's last label beside it, so the next one clears it.
+    beside = [-gap] * len(runs)
+    for container, heights in blocks:
+        for index, (patch, height) in enumerate(zip(container.patches, heights, strict=True)):
+            if not height:
+                continue
+            # A short block's value goes beside the bar rather than over its neighbors.
+            inside = height >= gap
+            y = patch.get_y() + height / 2
+            if not inside:
+                y = beside[index] = max(y, beside[index] + gap)
+            axis.annotate(
+                format_us(height),
+                (patch.get_x() + patch.get_width() * (0.5 if inside else 1), y),
+                xytext=(0 if inside else 3, 0),
+                textcoords="offset points",
+                ha="center" if inside else "left",
+                va="center",
+                fontsize=7,
+            )
     for position, total, bar in zip(positions, bottoms, bars, strict=True):
         axis.annotate(
             "no object phases" if bar is None else format_us(total),
@@ -80,8 +117,10 @@ def plot_processing(path: pathlib.Path, title: str, subtitle: str, runs: Sequenc
             ha="center",
             fontsize=8,
         )
-    axis.set_xticks(positions, [run.label for run in runs])
-    axis.set_ylabel("Mean work per inbound object (µs)\nincluding its copies and packets; waits excluded")
+    axis.set_xticks(positions, ticks if ticks is not None else [run.label for run in runs])
+    if axis_title is not None:
+        axis.set_xlabel(axis_title)
+    axis.set_ylabel("Mean processing latency (µs)")
     axis.grid(axis="y", alpha=0.25)
     # Reversed so the legend reads top to bottom like the stack.
     handles, labels = axis.get_legend_handles_labels()

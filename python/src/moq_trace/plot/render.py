@@ -26,6 +26,13 @@ from . import (
 )
 from .monitoring import plot_monitoring, plot_monitoring_comparison
 
+# Axis titles for a swept dimension, whose ticks then show bare values.
+_AXIS_TITLES = {
+    "subscribers": "Subscribers",
+    "object_size": "Object size (bytes)",
+    "objects_per_group": "Objects per group",
+}
+
 
 def _describe(metadata: RunMetadata, varied: str | None = None) -> str:
     """Summarize validated workload metadata for a figure subtitle.
@@ -122,7 +129,19 @@ def _render_comparison(
     plot_segments(plots / f"{prefix}_segments.png", f"Span segments by {dimension}", subtitle, runs)
     plot_breakdown(plots / f"{prefix}_breakdown.png", f"Where the time goes by {dimension}", subtitle, runs)
     plot_moq_work(plots / f"{prefix}_moq_work.png", f"MoQ work by {dimension}", subtitle, runs)
-    plot_processing(plots / f"{prefix}_processing.png", f"Processing per object by {dimension}", subtitle, runs)
+    if dimension == "relay":
+        axis_title, ticks = "Relay", None
+    else:
+        axis_title = _AXIS_TITLES[dimension]
+        ticks = [str(getattr(summary.workload, dimension)) for summary in summaries]
+    plot_processing(
+        plots / f"{prefix}_processing.png",
+        f"Processing per object by {dimension}",
+        subtitle,
+        runs,
+        axis_title=axis_title,
+        ticks=ticks,
+    )
     plot_transport_waits(plots / f"{prefix}_transport_waits.png", f"Transport waits by {dimension}", subtitle, runs)
     if any(summary.monitoring for summary in summaries):
         plot_monitoring_comparison(plots / f"{prefix}_monitoring.png", subtitle, runs)
