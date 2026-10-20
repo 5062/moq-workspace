@@ -12,7 +12,7 @@ from run_support import FakeRemote, command_set, peer, placement_for
 from moq_trace.errors import CaptureError
 from moq_trace.manifest import MANIFEST, read_manifest
 from moq_trace.metadata import CommandSet
-from moq_trace.run import capture, experiment, placement, tcpdump
+from moq_trace.run import capture, experiment, placement, sysctl, tcpdump
 from moq_trace.run.config import ExperimentConfig, HostConfig, Hosts, Sync
 from moq_trace.run.experiment import ExperimentError
 
@@ -30,6 +30,18 @@ class PacketCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("s3cret", " ".join(argv))
         self.assertEqual(argv[argv.index("-w") + 1], "/tmp/capture/relay.pcap")
         self.assertEqual(argv[argv.index("-Z") + 1], "me")
+
+    async def test_the_sudo_password_reaches_sysctl_only_on_stdin(self) -> None:
+        host = mock.Mock()
+        host.start = mock.AsyncMock()
+        host.start.return_value.wait = mock.AsyncMock(return_value=0)
+        with mock.patch.object(tcpdump, "_sudo_password", "s3cret"):
+            await sysctl.set_socket_buffers(host, 8_388_608, "/tmp/run", pathlib.Path("sysctl.log"))
+
+        _name, argv, _cwd, _log = host.start.call_args.args
+        self.assertEqual(host.start.call_args.kwargs["stdin"], b"s3cret\n")
+        self.assertNotIn("s3cret", " ".join(argv))
+        self.assertEqual(argv[4:7], ["sysctl", "-w", "net.core.rmem_default=8388608"])
 
     def test_relay_socket_drops_sum_every_socket_on_its_port(self) -> None:
         header = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout"
@@ -51,6 +63,7 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.root = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(mock.patch.object(placement, "RemoteHost", FakeRemote))
+        self.buffers = self.enterContext(mock.patch.object(capture, "set_socket_buffers", autospec=True))
 
     def _config(self, **overrides) -> ExperimentConfig:
         fields = {
@@ -223,6 +236,15 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(f"keylog={remote}/subscriber.keylog", (config.output / "subscriber.log").read_text())
         self.assertIn(f"keylog={config.output}/publisher.keylog", (config.output / "publisher.log").read_text())
         self.assertIn((remote, ["subscriber.keylog"]), where.subscriber.fetched)
+
+    async def test_every_host_gets_run_buffers_before_the_relay_and_defaults_after_the_peers(self) -> None:
+        config = self._config(trace=False, hosts=Hosts(subscriber=self._remote("peer")), relay_url="https://r:4443")
+        where, _ = await self._capture(config)
+
+        sizes = [(call.args[0], call.args[1]) for call in self.buffers.call_args_list]
+        run, default = sysctl.RUN_BUFFER_BYTES, sysctl.DEFAULT_BUFFER_BYTES
+        relay, peer = where.relay, where.subscriber
+        self.assertEqual(sizes, [(relay, run), (peer, run), (peer, default), (relay, default)])
 
     async def test_a_startup_delay_replaces_the_log_marker(self) -> None:
         config = self._config(trace=False, relay_ready_log="", relay_startup_seconds=1)

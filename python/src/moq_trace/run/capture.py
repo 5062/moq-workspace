@@ -18,7 +18,8 @@ from ..manifest import MANIFEST, QLOG_ENVIRONMENT, NetworkManifest
 from . import tls
 from .config import ExperimentConfig
 from .monitoring import Monitoring
-from .placement import Placement
+from .placement import ROLES, Placement
+from .sysctl import DEFAULT_BUFFER_BYTES, RUN_BUFFER_BYTES, set_socket_buffers
 from .tcpdump import start_packet_capture
 
 _log = logging.getLogger(__name__)
@@ -134,6 +135,15 @@ class CaptureSession:
         await self.cleanup.__aexit__(*exc)
 
     async def _open(self) -> None:
+        for host in dict.fromkeys(map(self.placement.host, ROLES)):
+            _log.info("setting socket buffers on %s", host.name)
+            directory = self.placement.directory(host)
+            name = host.name.replace("/", "_")
+            await set_socket_buffers(host, RUN_BUFFER_BYTES, directory, self.output / f"sysctl-{name}.log")
+            # Registered first, so it runs after every role process has closed.
+            self.cleanup.push_async_callback(
+                set_socket_buffers, host, DEFAULT_BUFFER_BYTES, directory, self.output / f"sysctl-reset-{name}.log"
+            )
         self.clock = await self.relay.clock()
         directories = [self.directory, f"{self.directory}/qlog"] if self.config.qlog else [self.directory]
         await self.relay.run(f"mkdir -p {shlex.join(directories)}")
