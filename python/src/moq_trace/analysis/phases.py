@@ -75,7 +75,9 @@ PACKET_PHASES = (
     # processing begins.
     Phase("packet", "rx", "read_queue", "Read queue", wait=True),
     Phase("packet", "rx", "header_parse", "Header parse", category="framing"),
-    Phase("packet", "rx", "routing", "Routing", category="routing"),
+    # Framing, because stacks without this phase look up the connection inside
+    # `header_parse`, so a category of its own would split out Quinn's alone.
+    Phase("packet", "rx", "routing", "Routing", category="framing"),
     # Quinn's `scheduling` phase is the wait in the connection's queue,
     # including waking its task, so it is labeled for what it measures.
     Phase("packet", "rx", "scheduling", "Queuing", wait=True),

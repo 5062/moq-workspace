@@ -15,11 +15,10 @@ from .common import PlotRun, format_us, save_figure
 _SEGMENTS = (
     ("packet", "crypto", "QUIC crypto"),
     ("packet", "framing", "QUIC framing"),
-    ("packet", "routing", "QUIC routing"),
     ("object", "framing", "MoQ framing"),
     ("object", "routing", "MoQ routing & fan-out"),
 )
-_COLORS = [plt.get_cmap("tab20c")(index) for index in (0, 1, 2, 4, 5)]
+_COLORS = [plt.get_cmap("tab20c")(index) for index in (0, 1, 4, 5)]
 
 # A block shorter than this share of the tallest bar has no room for its value inside.
 _LABEL_SHARE = 0.03
