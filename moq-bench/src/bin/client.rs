@@ -250,7 +250,7 @@ async fn watch(mut announced: announce::Consumer, want: u64, stats: Arc<Stats>, 
         let stats = stats.clone();
         tasks.spawn(async move {
             if let Err(err) = subscribe::drain(broadcast, stats, connection).await {
-                tracing::debug!(%path, %err, "subscription ended");
+                tracing::warn!(%path, %err, "subscription ended");
             }
         });
     }
