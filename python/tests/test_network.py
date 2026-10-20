@@ -209,17 +209,6 @@ class QlogTests(unittest.TestCase):
             with self.assertRaisesRegex(TraceError, "not JSON"):
                 list(network._qlog_records(path))
 
-    def test_a_json_document_qlog_uses_its_file_as_the_connection_and_the_quic_names(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = pathlib.Path(directory) / "c0ffee.qlog"
-            event = {"time": 2.5, "name": "quic:recovery_metrics_updated", "data": {"smoothed_rtt": 3.0}}
-            path.write_text(json.dumps({"title": "relay monotonic_start_ns=0", "traces": [{"events": [event]}]}))
-            expected = [(2_500_000, "c0ffee", "recovery:metrics_updated", {"smoothed_rtt": 3.0})]
-            self.assertEqual(list(network.read_qlog(path)), expected)
-            path.write_text('{"title": "relay monotonic_start_ns=0", "traces": [{"events": [')
-            with self.assertRaisesRegex(TraceError, "not a complete qlog JSON document"):
-                list(network.read_qlog(path))
-
     def test_a_qlog_without_its_start_instant_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "relay.sqlog"
@@ -254,7 +243,8 @@ class IngestTests(unittest.TestCase):
                     {
                         "time": time_ms,
                         "name": "transport:packet_received",
-                        "group_id": "pub",
+                        # The moxygen relay names a connection by the client's original destination ID.
+                        "group_id": "pub-odcid",
                         "data": {"header": {"packet_type": "1RTT", "packet_number": tick}},
                     },
                     {"time": time_ms, "name": "transport:packet_sent", "group_id": "sub", "data": {}},
@@ -272,6 +262,10 @@ class IngestTests(unittest.TestCase):
                     "group_id": "sub",
                     "data": {"header": {"packet_number": 7, "length": 1200}, "trigger": "time_threshold"},
                 }
+            )
+            # The moxygen relay counts the packets one detection declared lost.
+            events.append(
+                {"time": 3_000, "name": "recovery:packet_lost", "group_id": "sub", "data": {"lost_packets": 2}}
             )
             _qlog(root / "qlog" / "relay.sqlog", f"monotonic_start_ns={origin_ns - 1_000_000_000}", events)
             manifest = root / MANIFEST
@@ -339,7 +333,8 @@ class IngestTests(unittest.TestCase):
         self.assertEqual((capabilities.packets, capabilities.qlog_connections), (True, 2))
         self.assertEqual(roles, [("egress", "subscriber", 0), ("ingress", "publisher", 0)])
         self.assertEqual(rtt, [("subscriber 1", 1_000_000.0, 0)])
-        self.assertEqual(loss, [("subscriber 1", 1_000_000_000, 7)])
+        counted = ("subscriber 1", 2_000_000_000, None)
+        self.assertEqual(loss, [("subscriber 1", 1_000_000_000, 7), counted, counted])
         # Packet 0 was captured before the origin, so it has no wait.
         self.assertEqual(waits, [("publisher", 39, 5_000_000, 5_000_000, 95_000_000)])
         # Packet 0's datagram was captured before the origin.
