@@ -347,6 +347,61 @@ class WireTests(unittest.TestCase):
         with self.assertRaisesRegex(TraceError, "matched packets carrying different STREAM frames: 1"):
             self.ingest()
 
+    def test_a_retransmission_before_completion_is_left_out_of_wire_coverage(self) -> None:
+        # The copy leaves in packets 4 and 6, and packet 5 repeats packet 4's bytes
+        # before packet 6 completes the copy. The trace flags the repeat, and the
+        # wire must recognize it from the bytes already sent on the stream.
+        self.trace.connection.execute("DELETE FROM raw.quic_stream_frame WHERE trace_id = 4")
+        self.trace.connection.execute("DELETE FROM raw.quic_packet_end WHERE trace_id = 4")
+        self.trace.connection.execute("DELETE FROM raw.quic_packet_phase WHERE trace_id = 4")
+        self.records.pop()
+        for trace_id, number, start, retransmission in ((4, 1, 0, 0), (5, 2, 0, 1), (6, 3, 8, 0)):
+            sent = 230_000 + number * 20_000
+            if trace_id != 4:
+                self.trace.insert(
+                    "quic_packet_start",
+                    ctf_timestamp_ns=trace_id * 1_000,
+                    timestamp_ns=sent - 10_000,
+                    trace_id=trace_id,
+                    connection_id=2,
+                    direction="tx",
+                    packet_number=number,
+                    packet_space="data",
+                    byte_len=1200,
+                )
+            self.trace.insert(
+                "quic_packet_end",
+                ctf_timestamp_ns=trace_id * 1_000 + 2,
+                timestamp_ns=sent,
+                trace_id=trace_id,
+                packet_number=number,
+                packet_space="data",
+                byte_len=1200,
+                outcome="success",
+            )
+            self.trace.insert(
+                "quic_stream_frame",
+                ctf_timestamp_ns=trace_id * 1_000 + 1,
+                timestamp_ns=sent - 5_000,
+                trace_id=trace_id,
+                stream_id=20,
+                offset_start=start,
+                offset_end=start + 8,
+                outcome="success",
+                retransmission=retransmission,
+            )
+            self.trace.phase(trace_id, "send_queue", sent - 1_000, sent)
+            payload = self.subscriber.short(quic.SERVER, number, _stream(20, start, b"x" * 8))
+            self.datagram(sent - 1_000, SUBSCRIBER, False, payload)
+        self.prepare()
+        self.ingest()
+        wire_packets = self.trace.connection.execute(
+            "SELECT packet.trace_id FROM network.wire_coverage_packets AS coverage "
+            "JOIN network.wire_packets AS packet ON packet.packet_id = coverage.packet_trace_id "
+            "WHERE coverage.object_trace_id = 2 ORDER BY 1"
+        ).fetchall()
+        self.assertEqual(wire_packets, [(4,), (6,)])
+
     def test_an_rx_packet_read_before_its_capture_is_rejected(self) -> None:
         self.records[-2] = (
             95_000 + OFFSET,
