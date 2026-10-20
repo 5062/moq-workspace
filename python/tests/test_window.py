@@ -43,6 +43,35 @@ class WindowAndProcessTests(ModelCase):
             stream_offset_start=0,
         )
 
+    def reset_copy(self, trace_id: int) -> None:
+        """A copy of `unfinished_object`'s logical object that its subscriber reset."""
+
+        self.insert(
+            "moq_object_start",
+            ctf_timestamp_ns=trace_id * 1_000,
+            timestamp_ns=910_000,
+            trace_id=trace_id,
+            logical_group=8,
+            logical_frame=0,
+            session_id=trace_id,
+            connection_id=2,
+            direction="tx",
+            track_alias=1,
+            group_id=5,
+            object_id=0,
+            stream_id=trace_id * 10,
+            stream_offset_start=0,
+        )
+        self.insert(
+            "moq_object_end",
+            ctf_timestamp_ns=trace_id * 1_000 + 1,
+            timestamp_ns=920_000,
+            trace_id=trace_id,
+            stream_offset_end=8,
+            payload_bytes=16,
+            outcome="reset",
+        )
+
     def test_a_lifecycle_cut_off_after_the_window_is_accepted(self) -> None:
         """A relay killed at the end of a run leaves its last object unfinished."""
 
@@ -54,6 +83,31 @@ class WindowAndProcessTests(ModelCase):
         self.connection.execute("UPDATE model.window SET end_ns = 500_000")
 
         sql.check(self.connection, "checks/window")
+
+    def test_copies_of_an_ingress_cut_off_after_the_window_are_accepted(self) -> None:
+        """Subscribers stop before the relay, so a cut-off object's copies end first."""
+
+        self.object_start(1, "rx", 1)
+        self.object_start(2, "tx", 2)
+        self.unfinished_object(3, 900_000)
+        self.reset_copy(4)
+        self.prepare_model()
+        _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
+        self.connection.execute("UPDATE model.window SET end_ns = 500_000")
+
+        sql.check(self.connection, "checks/window")
+        rx_trace_id = self.connection.execute("SELECT rx_trace_id FROM model.objects WHERE trace_id = 4").fetchone()
+        self.assertEqual(rx_trace_id, (None,))
+
+    def test_a_second_ingress_of_one_logical_object_is_rejected(self) -> None:
+        self.object_start(1, "rx", 1)
+        self.object_start(2, "tx", 2)
+        self.unfinished_object(3, 900_000)
+        self.unfinished_object(4, 905_000)
+        self.reset_copy(5)
+
+        with self.assertRaisesRegex(TraceError, "logical objects do not have exactly one ingress lifecycle: 1"):
+            self.prepare_model()
 
     def test_a_lifecycle_unfinished_inside_the_window_is_rejected(self) -> None:
         self.object_start(1, "rx", 1)

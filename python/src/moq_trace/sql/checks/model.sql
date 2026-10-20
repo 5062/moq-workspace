@@ -30,10 +30,16 @@ FROM packet_phase_intervals AS application JOIN packet_phase_intervals AS other 
 WHERE application.phase = 'application' AND other.span_id <> application.span_id
   AND other.start_ns < application.end_ns AND application.start_ns < other.end_ns
 UNION ALL
+-- Ingress starts are counted, because the relay is killed while it still
+-- receives objects whose copies already ended. `checks/window` rejects an open
+-- lifecycle inside the window, and copies of an open ingress carry no
+-- `rx_trace_id`.
 SELECT 'logical objects do not have exactly one ingress lifecycle', count(*)
 FROM (
   SELECT logical_group, logical_frame, count(*) FILTER (direction = 'rx') AS ingress
-  FROM model.objects GROUP BY ALL HAVING ingress <> 1
+  FROM moq_object_start
+  SEMI JOIN model.objects USING (logical_group, logical_frame)
+  GROUP BY ALL HAVING ingress <> 1
 )
 UNION ALL
 -- An RX packet starts when the read that returned its datagram completes, and a
