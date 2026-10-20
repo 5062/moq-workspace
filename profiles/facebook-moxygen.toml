@@ -10,7 +10,8 @@
 # to the session that published it, so a workload that subscribes to its own
 # broadcast receives nothing. The relay keeps stock moxygen's read path, folly's
 # read callback, whose system calls the traced build times through a folly
-# patch and an mvfst read dispatcher.
+# patch and an mvfst read dispatcher. With `QLOGDIR` set, the relay streams one
+# mvfst qlog document per connection into it.
 checkout = "relays/facebook-moxygen"
 # The relay host initializes these besides the suite's submodules.
 submodules = ["relays/facebook-moxygen", "deps/mvfst"]

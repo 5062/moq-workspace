@@ -209,6 +209,17 @@ class QlogTests(unittest.TestCase):
             with self.assertRaisesRegex(TraceError, "not JSON"):
                 list(network._qlog_records(path))
 
+    def test_a_json_document_qlog_uses_its_file_as_the_connection_and_the_quic_names(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "c0ffee.qlog"
+            event = {"time": 2.5, "name": "quic:recovery_metrics_updated", "data": {"smoothed_rtt": 3.0}}
+            path.write_text(json.dumps({"title": "relay monotonic_start_ns=0", "traces": [{"events": [event]}]}))
+            expected = [(2_500_000, "c0ffee", "recovery:metrics_updated", {"smoothed_rtt": 3.0})]
+            self.assertEqual(list(network.read_qlog(path)), expected)
+            path.write_text('{"title": "relay monotonic_start_ns=0", "traces": [{"events": [')
+            with self.assertRaisesRegex(TraceError, "not a complete qlog JSON document"):
+                list(network.read_qlog(path))
+
     def test_a_qlog_without_its_start_instant_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "relay.sqlog"

@@ -12,7 +12,9 @@ Both sources are placed on the trace's time axis. A capture stamps packets with
 to a start instant the relay chooses, so the relay must record that instant as
 `monotonic_start_ns=<nanoseconds>` in the qlog `title` or `description`. RTT
 fields are read as milliseconds, as the qlog specification defines them, unless
-the same field also holds `rtt_unit=s`.
+the same field also holds `rtt_unit=s`. A qlog is either JSON-SEQ, as Quinn
+streams it, or one JSON document with a single trace, as mvfst streams it, and
+may name events by either the `transport:`/`recovery:` or the `quic:` draft.
 """
 
 from __future__ import annotations
@@ -37,6 +39,13 @@ _MONOTONIC_START = re.compile(r"monotonic_start_ns=(\d+)")
 # seconds; Quinn 0.11, for one, serializes `Duration::as_secs_f32`. A producer
 # declares that with `rtt_unit=s` beside its start instant.
 _RTT_UNIT = re.compile(r"rtt_unit=(ms|s)\b")
+# The later qlog draft's names for the events the analysis reads, as mvfst writes them.
+_QLOG_NAMES = {
+    "quic:packet_received": "transport:packet_received",
+    "quic:packet_sent": "transport:packet_sent",
+    "quic:recovery_metrics_updated": "recovery:metrics_updated",
+    "quic:packet_lost": "recovery:packet_lost",
+}
 
 
 def capture_statistics(path: pathlib.Path) -> dict[str, int | None]:
@@ -111,15 +120,29 @@ def read_qlog(path: pathlib.Path) -> Iterator[tuple[int, str, str, dict]]:
 
     Events are keyed by `group_id`, which Quinn sets to the peer's original
     connection ID (a client's source ID, at the relay), so one file may
-    describe several connections.
-    RTT fields in `recovery:metrics_updated` are normalized to milliseconds.
+    describe several connections; a file without it is one connection, named
+    by the file. Event names are normalized to `transport:`/`recovery:`, and
+    RTT fields in `recovery:metrics_updated` to milliseconds.
     """
 
-    records = _qlog_records(path)
-    header = next(records, None)
-    if header is None:
-        return
-    trace = header.get("trace") or {}
+    with path.open("rb") as stream:
+        sequence = stream.read(64).lstrip()[:1] != b"{"
+    if sequence:
+        records = _qlog_records(path)
+        header = next(records, None)
+        if header is None:
+            return
+        trace = header.get("trace") or {}
+    else:
+        try:
+            header = json.loads(path.read_bytes())
+        except json.JSONDecodeError as error:
+            raise TraceError(f"{path} is not a complete qlog JSON document: {error}") from error
+        traces = header.get("traces") or []
+        if len(traces) != 1:
+            raise TraceError(f"{path} holds {len(traces)} qlog traces; the analysis reads files with one")
+        trace = traces[0]
+        records = iter(trace.get("events") or [])
     fields = " ".join(str(source.get(key, "")) for source in (header, trace) for key in ("title", "description"))
     start = _MONOTONIC_START.search(fields)
     if start is None:
@@ -132,6 +155,7 @@ def read_qlog(path: pathlib.Path) -> Iterator[tuple[int, str, str, dict]]:
     rtt_scale = 1_000.0 if unit is not None and unit.group(1) == "s" else 1.0
     for event in records:
         name = event.get("name")
+        name = _QLOG_NAMES.get(name, name)
         time_ms = event.get("time")
         if name is None or time_ms is None:
             continue
@@ -319,8 +343,15 @@ def _ingest_qlog(
                     )
                 )
             elif name == "recovery:packet_lost" and elapsed_ns >= 0:
-                header = data.get("header") or {}
-                losses.append((elapsed_ns, key, header.get("packet_number"), header.get("length"), data.get("trigger")))
+                if "lost_packets" in data:
+                    # mvfst reports one loss detection as a count, without each packet's number or size.
+                    for _ in range(data["lost_packets"]):
+                        losses.append((elapsed_ns, key, None, None, None))
+                else:
+                    header = data.get("header") or {}
+                    losses.append(
+                        (elapsed_ns, key, header.get("packet_number"), header.get("length"), data.get("trigger"))
+                    )
     recovery.flush()
     losses.flush()
     receives.flush()
