@@ -87,9 +87,10 @@ def plot_network(
 ) -> None:
     """Render what the network did during the run, on the latency figures' time axis.
 
-    Throughput comes from the packet capture. RTT, lost packets, and congestion
-    window come from the relay's qlog, which is the relay's own view of each
-    connection. Receive wait joins the two: how long each received packet sat
+    Throughput comes from the packet capture. RTT, sent packets lost, and
+    congestion window come from the relay's qlog, which is the relay's own view
+    of each connection. Received datagrams the relay's socket dropped come from
+    the capture and the trace. Receive wait joins the two: how long each received packet sat
     between its capture and the relay's QUIC stack reading it. A panel whose source was not captured says so instead of
     disappearing, so a missing measurement is never read as a clean network.
     """
@@ -164,29 +165,62 @@ def plot_network(
                 [count for _second, count in lost],
                 width=width,
                 color=color,
-                label=role,
+                label=f"sent to {role}, lost",
             )
     rtt.set_title("RTT from the relay's qlog: solid smoothed, dashed minimum")
     rtt.set_ylabel("RTT (ms)")
-    loss.set_title("Packets the relay declared lost, per second")
-    loss.set_ylabel("Lost packets")
+    # A QUIC endpoint declares only its own sent packets lost, so datagrams the
+    # relay's socket dropped on the way in come from the capture instead.
+    for label, role_filter, color in (
+        ("from publisher, dropped", "role = 'publisher'", "C0"),
+        ("from subscribers, dropped", "role IS DISTINCT FROM 'publisher'", "C3"),
+    ):
+        # Seconds without a drop are drawn as zero, not bridged by the line.
+        dropped = connection.execute(
+            f"""WITH counts AS (
+                  SELECT floor(elapsed_ns / 1e9) AS second, count(*) AS dropped
+                  FROM network.receive_drops WHERE {role_filter} GROUP BY second
+                )
+                SELECT seconds.second + 0.5, coalesce(counts.dropped, 0)
+                FROM range(0, (SELECT max(second) + 1 FROM counts)::BIGINT) AS seconds(second)
+                LEFT JOIN counts USING (second) ORDER BY seconds.second"""
+        ).fetchall()
+        if dropped:
+            loss.step(
+                [second for second, _count in dropped],
+                [count for _second, count in dropped],
+                where="mid",
+                color=color,
+                marker=".",
+                label=label,
+            )
+    loss.set_title(
+        "Loss at the relay per second: bars, sent packets its qlog declared lost; "
+        "lines, received datagrams its socket dropped"
+    )
+    loss.set_ylabel("Packets or datagrams")
     window.set_title("Congestion window from the relay's qlog: solid window, dashed peak bytes in flight per 100 ms")
     window.set_ylabel("KiB")
     window.set_ylim(bottom=0)
     window.set_xlabel("Elapsed time (s)")
     if not qlog:
-        for axis in (rtt, loss, window):
+        for axis in (rtt, window):
             _no_data(axis, "No qlog in this run (the relay must write qlog to $QLOGDIR)")
     else:
         rtt.legend(loc="upper right", fontsize=8)
         window.legend(loc="upper right", fontsize=8)
-        total = connection.execute("SELECT count(*) FROM network.losses").fetchone()[0]
-        if total == 0:
-            _no_data(loss, "No packets declared lost")
-        elif loss.get_legend_handles_labels()[0]:
-            loss.legend(loc="upper right", fontsize=8)
+    if loss.get_legend_handles_labels()[0]:
+        loss.legend(loc="upper right", fontsize=8)
+    else:
+        # Each direction says why it is empty, so no blank panel reads as a clean network.
+        if not qlog:
+            sent = "no qlog in this run"
+        elif connection.execute("SELECT count(*) FROM network.losses").fetchone()[0]:
+            sent = "only on connections not shown"
         else:
-            _no_data(loss, "Losses occurred only on connections not shown")
+            sent = "none declared lost"
+        received = "none dropped" if packets else "no packet capture in this run"
+        _no_data(loss, f"Sent packets lost: {sent}\nReceived datagrams dropped: {received}")
     waited = False
     for label, role_filter, color in (
         ("publisher", "role = 'publisher'", "C0"),

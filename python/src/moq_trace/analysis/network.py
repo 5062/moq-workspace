@@ -351,7 +351,8 @@ def ingest(
     `root` is the directory the manifest's paths are relative to. Every table
     measures `elapsed_ns` from `origin_ns`, the trace instant the latency
     samples are measured from, so network and latency figures share one axis.
-    Datagrams, losses, and receive waits before the origin are dropped. Recovery updates before
+    Datagrams, losses, receive waits, and receive drops before the origin are
+    dropped. Recovery updates before
     it are kept at negative times, because their values hold until the next
     update.
 
@@ -380,6 +381,8 @@ def ingest(
         else:
             wire_packets = decrypt(datagrams)
         throughput.store()
+        if decrypt is not None:
+            connection.execute(sql.read("network/receive-drops"), {"origin": origin_ns})
     wire = manifest.pcap is not None and decrypt is not None
     qlog_connections = _ingest_qlog(connection, manifest, root, origin_ns, wire)
     return NetworkCapabilities(

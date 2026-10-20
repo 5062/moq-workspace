@@ -49,3 +49,11 @@ CREATE TABLE network.receive_waits (
     wait_ns BIGINT NOT NULL,
     role VARCHAR
 );
+
+-- Datagrams the relay was sent but never read: captured, yet no packet in them
+-- reached the trace. The wire checks bound these by the relay socket's drops.
+CREATE TABLE network.receive_drops (
+    elapsed_ns BIGINT NOT NULL,
+    peer VARCHAR,
+    role VARCHAR
+);

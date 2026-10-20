@@ -279,16 +279,21 @@ class IngestTests(unittest.TestCase):
 
             def decrypt(datagrams) -> int:
                 # Stands in for the decrypted capture: the publisher's packet
-                # `tick` was captured 5 ms before the relay's qlog received it.
+                # `tick` was captured 5 ms before the relay's qlog received it,
+                # and packets 0, 20, and 21 never reached the trace.
                 for _ in datagrams:
                     pass
                 connection.execute(
-                    """CREATE TABLE network.wire_connections (connection UINTEGER, original_remote_cid VARCHAR);
-                       INSERT INTO network.wire_connections VALUES (0, 'pub');
+                    """CREATE TABLE network.wire_connections (connection UINTEGER, original_remote_cid VARCHAR,
+                           peer_address VARCHAR, peer_port USMALLINT);
+                       INSERT INTO network.wire_connections VALUES (0, 'pub', '10.0.0.2', 50000);
                        CREATE TABLE network.wire_packets (connection UINTEGER, direction VARCHAR,
-                           timestamp_ns BIGINT, packet_space VARCHAR, packet_number UBIGINT);
+                           timestamp_ns BIGINT, packet_space VARCHAR, packet_number UBIGINT,
+                           datagram UBIGINT, trace_id UBIGINT);
                        INSERT INTO network.wire_packets
-                       SELECT 0, 'rx', $origin + tick * 100_000_000 - 5_000_000, 'data', tick FROM range(40) t(tick)""",
+                       SELECT 0, 'rx', $origin + tick * 100_000_000 - 5_000_000, 'data', tick, tick,
+                              CASE WHEN tick IN (0, 20, 21) THEN NULL ELSE tick END
+                       FROM range(40) t(tick)""",
                     {"origin": origin_ns},
                 )
                 return 40
@@ -298,6 +303,9 @@ class IngestTests(unittest.TestCase):
                 waits = connection.execute(
                     """SELECT role, count(*), min(wait_ns), max(wait_ns), min(elapsed_ns)
                        FROM network.receive_waits GROUP BY role"""
+                ).fetchall()
+                drops = connection.execute(
+                    "SELECT role, count(*), min(elapsed_ns) FROM network.receive_drops GROUP BY role"
                 ).fetchall()
                 roles = connection.execute(
                     "SELECT direction, role, min(elapsed_ns) FROM network.datagrams GROUP BY ALL ORDER BY ALL"
@@ -323,6 +331,8 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(loss, [("subscriber 1", 1_000_000_000, 7)])
         # Packet 0 was captured before the origin, so it has no wait.
         self.assertEqual(waits, [("publisher", 39, 5_000_000, 5_000_000, 95_000_000)])
+        # Packet 0's datagram was captured before the origin.
+        self.assertEqual(drops, [("publisher", 2, 1_995_000_000)])
         self.assertEqual(recovery_types["min_rtt_ns"], "DOUBLE")
         self.assertEqual(recovery_types["bytes_in_flight"], "BIGINT")
 
