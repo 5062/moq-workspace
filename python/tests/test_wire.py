@@ -439,6 +439,7 @@ class WireTests(unittest.TestCase):
                 first_ns=20000,
                 last_ns=500000,
                 original_remote_cid=bytes([i]),
+                original_destination_cid=bytes([i + 16]),
             )
             for i in range(2)
         ]
@@ -446,7 +447,7 @@ class WireTests(unittest.TestCase):
             self.trace.connection,
             "network.wire_connections",
             wire._CONNECTION_COLUMNS,
-            [(i, *RELAY, *SUBSCRIBER, True, 20000, 500000, f"{i:02x}") for i in range(2)],
+            [(i, *RELAY, *SUBSCRIBER, True, 20000, 500000, f"{i:02x}", f"{i + 16:02x}") for i in range(2)],
         )
         _load(
             self.trace.connection,

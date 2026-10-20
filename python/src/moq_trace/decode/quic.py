@@ -287,6 +287,9 @@ class Connection:
     # ID when the peer is the client, else the client's original destination
     # ID. Quinn's qlog names the connection by it.
     original_remote_cid: bytes
+    # The destination ID of the first client Initial, which mvfst's qlog names
+    # the connection by.
+    original_destination_cid: bytes
     suite: Suite | None = None
     client_random: bytes | None = None
     handshake: dict[str, Keys] = dataclasses.field(default_factory=dict)
@@ -473,6 +476,7 @@ class Decryptor:
                 first_ns=timestamp_ns,
                 last_ns=timestamp_ns,
                 original_remote_cid=scid if from_peer else dcid,
+                original_destination_cid=dcid,
             )
             new_connection = True
         elif connection is None:

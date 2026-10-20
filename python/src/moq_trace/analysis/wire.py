@@ -78,6 +78,7 @@ _CONNECTION_COLUMNS = pa.schema(
         ("first_ns", pa.int64()),
         ("last_ns", pa.int64()),
         ("original_remote_cid", pa.string()),
+        ("original_destination_cid", pa.string()),
     ]
 )
 _PACKET_COLUMNS = pa.schema(
@@ -185,6 +186,7 @@ def ingest(
                 state.first_ns,
                 state.last_ns,
                 state.original_remote_cid.hex(),
+                state.original_destination_cid.hex(),
             )
         )
     connections.flush()

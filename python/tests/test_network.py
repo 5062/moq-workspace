@@ -296,8 +296,8 @@ class IngestTests(unittest.TestCase):
                     pass
                 connection.execute(
                     """CREATE TABLE network.wire_connections (connection UINTEGER, original_remote_cid VARCHAR,
-                           peer_address VARCHAR, peer_port USMALLINT);
-                       INSERT INTO network.wire_connections VALUES (0, 'pub', '10.0.0.2', 50000);
+                           original_destination_cid VARCHAR, peer_address VARCHAR, peer_port USMALLINT);
+                       INSERT INTO network.wire_connections VALUES (0, 'pub', 'pub-odcid', '10.0.0.2', 50000);
                        CREATE TABLE network.wire_packets (connection UINTEGER, direction VARCHAR,
                            timestamp_ns BIGINT, packet_space VARCHAR, packet_number UBIGINT,
                            datagram UBIGINT, trace_id UBIGINT);
