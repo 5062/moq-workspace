@@ -113,14 +113,25 @@ async def _binaries(placement: Placement) -> Binaries:
     )
 
 
-def _validate_workload(database: pathlib.Path) -> None:
+def _warn_missing_groups(database: pathlib.Path) -> None:
+    """Name the steady-state groups the relay never measured.
+
+    An overloaded relay or publisher can skip whole groups. The objects that did
+    arrive are still measured, so the run is kept and its figures rendered.
+    """
+
     with open_artifact(database, "run") as artifact:
-        count, first, last = artifact.connection.execute(
-            "SELECT count(DISTINCT group_id), min(group_id), max(group_id) "
-            "FROM model.selected_objects JOIN model.objects USING (trace_id)"
-        ).fetchone()
-        if count != last - first + 1:
-            raise ExperimentError("steady-state groups are not contiguous")
+        missing = [
+            row[0]
+            for row in artifact.connection.execute(
+                "SELECT unnest(range(min(group_id)::BIGINT, max(group_id)::BIGINT + 1)) AS group_id "
+                "FROM model.selected_objects JOIN model.objects USING (trace_id) "
+                "EXCEPT SELECT group_id FROM model.selected_objects JOIN model.objects USING (trace_id) "
+                "ORDER BY group_id"
+            ).fetchall()
+        ]
+    if missing:
+        _log.warning("steady-state groups are missing: %s", ", ".join(map(str, missing)))
 
 
 async def run(config: ExperimentConfig, pool: SshPool) -> pathlib.Path:
@@ -179,7 +190,7 @@ async def run(config: ExperimentConfig, pool: SshPool) -> pathlib.Path:
         network=capture.network,
         monitoring=capture.monitoring,
     )
-    await asyncio.to_thread(_validate_workload, database)
+    await asyncio.to_thread(_warn_missing_groups, database)
     if capture.monitoring is not None:
         from ..analysis.monitoring import write_summary
 

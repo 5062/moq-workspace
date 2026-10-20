@@ -17,7 +17,7 @@ from moq_trace.errors import CaptureError
 from moq_trace.run import experiment, tcpdump, tls
 from moq_trace.run.commands import commands
 from moq_trace.run.config import ExperimentConfig, HostConfig, Hosts
-from moq_trace.run.experiment import ExperimentError, _validate_workload
+from moq_trace.run.experiment import _warn_missing_groups
 
 PROTOCOL = "moq-transport-16"
 
@@ -25,7 +25,7 @@ PROTOCOL = "moq-transport-16"
 class ConfigurationTests(unittest.TestCase):
     """Configuration validation and command construction, which touch no host."""
 
-    def test_experiment_requires_contiguous_groups(self) -> None:
+    def test_missing_steady_state_groups_are_named_in_a_warning(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = pathlib.Path(directory) / "analysis.duckdb"
             with duckdb.connect(str(database)) as connection:
@@ -33,15 +33,17 @@ class ConfigurationTests(unittest.TestCase):
                 connection.execute("CREATE SCHEMA model")
                 connection.execute(
                     """CREATE TABLE model.objects AS
-                       SELECT unnest([4, 6]) AS trace_id, unnest([4, 6]) AS group_id"""
+                       SELECT unnest([4, 7]) AS trace_id, unnest([4, 7])::UBIGINT AS group_id"""
                 )
                 connection.execute("CREATE TABLE model.selected_objects AS SELECT trace_id FROM model.objects")
-            with self.assertRaisesRegex(ExperimentError, "groups are not contiguous"):
-                _validate_workload(database)
+            with self.assertLogs(experiment._log, "WARNING") as logs:
+                _warn_missing_groups(database)
+            self.assertEqual(logs.output, [f"WARNING:{experiment._log.name}:steady-state groups are missing: 5, 6"])
             with duckdb.connect(str(database)) as connection:
-                connection.execute("INSERT INTO model.objects VALUES (5, 5)")
-                connection.execute("INSERT INTO model.selected_objects VALUES (5)")
-            _validate_workload(database)
+                connection.execute("INSERT INTO model.objects VALUES (5, 5), (6, 6)")
+                connection.execute("INSERT INTO model.selected_objects VALUES (5), (6)")
+            with self.assertNoLogs(experiment._log):
+                _warn_missing_groups(database)
 
     def test_the_relay_certificate_is_a_self_signed_localhost_pair(self) -> None:
         config = ExperimentConfig(protocol=PROTOCOL, output=pathlib.Path("run"), relay_args=("--cert", "{certificate}"))
