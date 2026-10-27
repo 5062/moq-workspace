@@ -66,7 +66,7 @@ def _fanout_note(metadata: RunMetadata) -> str:
     expected = metadata.counts.correlated_objects * metadata.workload.subscribers
     successful = metadata.counts.copy_outcomes.get("success", 0)
     if successful < expected:
-        return f"{successful:,}/{expected:,} copies successful; latencies use successful copies only"
+        return f"{successful:,}/{expected:,} copies successful"
     return ""
 
 
