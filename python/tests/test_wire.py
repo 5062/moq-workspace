@@ -512,7 +512,13 @@ class WireTests(unittest.TestCase):
 class CoverageAgreementTests(unittest.TestCase):
     """The trace and the wire must cover and complete every object with the same packets."""
 
-    def check(self, trace: list[tuple[int, int]], wire: list[tuple[int, int]], complete: tuple[int, int]) -> None:
+    def check(
+        self,
+        trace: list[tuple[int, int]],
+        wire: list[tuple[int, int]],
+        complete: tuple[int, int],
+        direction: str = "rx",
+    ) -> None:
         """Check one object whose trace and wire coverage are `(object, packet trace ID)` rows.
 
         Wire packet IDs are the trace IDs plus 100, so only the join through
@@ -528,7 +534,9 @@ class CoverageAgreementTests(unittest.TestCase):
             CREATE TABLE network.wire_coverage_packets (object_trace_id UBIGINT, packet_trace_id UBIGINT);
             CREATE TABLE network.wire_coverage (object_trace_id UBIGINT, complete_packet_trace_id UBIGINT);
             CREATE TABLE network.wire_coverage_frames (object_trace_id UBIGINT, seq UINTEGER);
-            CREATE TABLE network.wire_packets (packet_id UBIGINT, trace_id UBIGINT)""")
+            CREATE TABLE network.wire_packets (packet_id UBIGINT, trace_id UBIGINT);
+            CREATE TABLE model.objects (trace_id UBIGINT, direction VARCHAR)""")
+        connection.execute("INSERT INTO model.objects VALUES (1, ?)", [direction])
         connection.executemany("INSERT INTO model.coverage_packets VALUES (?, ?)", trace)
         connection.executemany("INSERT INTO network.wire_coverage_packets VALUES (?, ? + 100)", wire)
         connection.executemany("INSERT INTO network.wire_packets VALUES (? + 100, ?)", [(i, i) for i in range(10)])
@@ -546,6 +554,13 @@ class CoverageAgreementTests(unittest.TestCase):
     def test_a_different_completing_packet_is_rejected(self) -> None:
         with self.assertRaisesRegex(TraceError, "objects completed by a different packet: 1"):
             self.check([(1, 2), (1, 3)], [(1, 2), (1, 3)], (3, 2))
+
+    def test_a_copy_reordered_after_its_send_passes(self) -> None:
+        self.check([(1, 2), (1, 3)], [(1, 2), (1, 3)], (3, 2), direction="tx")
+
+    def test_a_copy_covered_by_different_packets_is_rejected(self) -> None:
+        with self.assertRaisesRegex(TraceError, "objects covered by different packets: 1"):
+            self.check([(1, 2), (1, 3)], [(1, 2), (1, 4)], (3, 3), direction="tx")
 
 
 def _load(connection, table: str, columns, rows: list[tuple]) -> None:
