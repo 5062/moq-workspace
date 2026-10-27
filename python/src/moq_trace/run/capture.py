@@ -158,6 +158,8 @@ class CaptureSession:
             _log.info("starting the packet capture on %s", self.relay.name)
             directory = self.placement.capture_directory()
             await self.relay.run(f"mkdir -m 700 -p {shlex.quote(directory)}")
+            # Removed even when the run fails: a capture fills the relay host's disk within a few runs.
+            self.cleanup.push_async_callback(self.relay.run, f"rm -rf {shlex.quote(directory)}")
             self.tcpdump = await start_packet_capture(
                 self.relay, directory, self.config.port, self.output / "tcpdump.log"
             )
@@ -236,7 +238,6 @@ class CaptureSession:
         if self.tcpdump is not None:
             directory = self.placement.capture_directory()
             await self.relay.fetch(directory, ["relay.pcap"], self.output)
-            await self.relay.run(f"rm -rf {shlex.quote(directory)}")
             for role in roles:
                 host = self.placement.host(role)
                 await host.fetch(self.placement.directory(host), [_key_log(role)], self.output)
