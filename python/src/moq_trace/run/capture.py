@@ -20,7 +20,7 @@ from .config import ExperimentConfig
 from .monitoring import Monitoring
 from .placement import ROLES, Placement
 from .sysctl import DEFAULT_BUFFER_BYTES, RUN_BUFFER_BYTES, set_socket_buffers
-from .tcpdump import start_packet_capture
+from .tcpdump import start_packet_capture, stop_packet_capture
 
 _log = logging.getLogger(__name__)
 
@@ -163,7 +163,7 @@ class CaptureSession:
             self.tcpdump = await start_packet_capture(
                 self.relay, directory, self.config.port, self.output / "tcpdump.log"
             )
-            self.cleanup.push_async_callback(self.tcpdump.close)
+            self.cleanup.push_async_callback(stop_packet_capture, self.tcpdump)
 
     async def start(self, role: str, command: Sequence[str]) -> Process:
         """Start a role with its capture environment and retain cleanup ownership."""

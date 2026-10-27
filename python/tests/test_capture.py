@@ -145,7 +145,7 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_workload_failure_closes_recorders_without_publishing_a_manifest(self) -> None:
         config = self._config(capture_packets=True, duration_seconds=5)
-        packet_capture = mock.Mock(stop=mock.AsyncMock(), close=mock.AsyncMock())
+        packet_capture = mock.Mock(stop=mock.AsyncMock())
         with (
             mock.patch.object(capture, "LttngSession", autospec=True) as session_class,
             mock.patch.object(capture, "start_packet_capture", mock.AsyncMock(return_value=packet_capture)),
@@ -155,7 +155,8 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
                 await self._capture(config, command_set(publisher=publisher))
             session_class.return_value.close.assert_awaited_once()
             session_class.return_value.finish.assert_not_awaited()
-            packet_capture.close.assert_awaited_once()
+            # SIGINT, which sudo relays; SIGKILL would orphan tcpdump.
+            packet_capture.stop.assert_awaited_once_with(True)
             self.assertFalse((config.output / MANIFEST).exists())
 
     async def test_a_remote_subscriber_is_not_recorded(self) -> None:
@@ -185,7 +186,6 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_local_packet_capture_is_copied_into_the_run(self) -> None:
         tcpdump_process = mock.Mock()
         tcpdump_process.stop = mock.AsyncMock()
-        tcpdump_process.close = mock.AsyncMock()
 
         async def start(host, directory, port, log):
             pathlib.Path(directory, "relay.pcap").write_bytes(b"pcap")
@@ -202,7 +202,8 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
 
         host, directory, port, _log = start_capture.call_args.args
         self.assertEqual((host, directory, port), (where.relay, where.capture_directory(), config.port))
-        tcpdump_process.stop.assert_awaited_once_with(True)
+        # Once to finish the capture, then again by cleanup, which finds it stopped.
+        self.assertEqual(tcpdump_process.stop.await_args_list, [mock.call(True)] * 2)
         self.assertEqual((config.output / "relay.pcap").read_bytes(), b"pcap")
         self.assertFalse(pathlib.Path(directory).exists())
         manifest = read_manifest(config.output / MANIFEST)
@@ -213,7 +214,6 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
     async def test_peers_log_their_tls_secrets_beside_a_packet_capture(self) -> None:
         tcpdump_process = mock.Mock()
         tcpdump_process.stop = mock.AsyncMock()
-        tcpdump_process.close = mock.AsyncMock()
 
         async def start(host, directory, port, log):
             pathlib.Path(directory, "relay.pcap").write_bytes(b"pcap")

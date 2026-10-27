@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
 
@@ -81,9 +82,20 @@ async def start_packet_capture(host: Host, directory: str, port: int, log: pathl
     try:
         await process.wait_for_line(lambda line: "listening on" in line, "tcpdump listening", 10)
     except CaptureError as error:
-        await process.close()
+        await stop_packet_capture(process)
         reason = process.lines[-1] if process.lines else str(error)
         sudo = "password" in reason or "sudo" in reason
         hint = f"tcpdump needs sudo: set {SUDO_PASSWORD_ENVIRONMENT} or allow it without a password; " if sudo else ""
         raise CaptureError(f"packet capture failed: {reason} ({hint}see {log})") from error
     return process
+
+
+async def stop_packet_capture(process: Process) -> None:
+    """Stop a capture during cleanup without masking an earlier failure.
+
+    SIGKILL would end only sudo and leave tcpdump writing on, so sudo is sent
+    SIGINT, which it relays to tcpdump.
+    """
+
+    with contextlib.suppress(CaptureError, OSError):
+        await process.stop(True)
