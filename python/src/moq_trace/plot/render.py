@@ -65,9 +65,12 @@ def _fanout_note(metadata: RunMetadata) -> str:
 
     expected = metadata.counts.correlated_objects * metadata.workload.subscribers
     successful = metadata.counts.copy_outcomes.get("success", 0)
+    notes = []
     if successful < expected:
-        return f"{successful:,}/{expected:,} copies successful"
-    return ""
+        notes.append(f"{successful:,}/{expected:,} copies successful")
+    if unsent := metadata.counts.unsent_copies:
+        notes.append(f"{unsent:,} never fully sent")
+    return ", ".join(notes)
 
 
 def _render_run(

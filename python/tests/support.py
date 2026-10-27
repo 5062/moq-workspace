@@ -30,6 +30,7 @@ def run_metadata(**overrides) -> RunMetadata:
             correlated_objects=1,
             correlated_object_copies=1,
             copy_outcomes={"success": 1},
+            unsent_copies=0,
         ),
         "processes": Processes(process_id=0, analyzed_pid=0, captured_pids=(0,)),
     }

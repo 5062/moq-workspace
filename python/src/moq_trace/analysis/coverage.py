@@ -5,7 +5,7 @@ frame's connection, direction, stream, byte range, the instant it completed its
 bytes, and its packet's ID and start. The trace provides one source and the
 decrypted packet capture another, and both resolve with the same rule into a
 family of tables of one layout: `<family>`, `<family>_frames`, and
-`<family>_packets`.
+`<family>_packets`. A copy whose bytes were never all sent has no rows.
 """
 
 from __future__ import annotations
@@ -57,14 +57,25 @@ def _resolve_targets(connection: duckdb.DuckDBPyConnection, family: str = "model
     _validate_targets(connection)
     for stage in ("coverage/frames-stage", "coverage/completion-stage"):
         connection.execute(sql.read(stage), {"bucket": _BUCKET_BYTES})
+    # A copy the relay wrote can still sit in a stalled connection's send buffer
+    # when the recording stops, so it stays uncovered; an inbound object cannot.
     incomplete = _first_trace(
         connection,
-        "SELECT trace_id FROM coverage_completion WHERE complete_seq IS NULL ORDER BY trace_id LIMIT 1",
+        """SELECT trace_id FROM coverage_completion JOIN coverage_targets USING (trace_id)
+           WHERE complete_seq IS NULL AND direction = 'rx' ORDER BY trace_id LIMIT 1""",
     )
     if incomplete is not None:
         raise TraceError(f"object trace {incomplete} does not have complete packet coverage")
     for name in ("coverage/schema", "coverage/populate"):
         connection.execute(sql.read(name).replace("{coverage}", family))
+
+
+def unsent_copies(connection: duckdb.DuckDBPyConnection) -> int:
+    """Count the selected copies the trace never finished sending, which no metric samples."""
+
+    return connection.execute(
+        "SELECT count(*) FROM selected_copies ANTI JOIN model.coverage ON object_trace_id = tx_trace_id"
+    ).fetchone()[0]
 
 
 def resolve(

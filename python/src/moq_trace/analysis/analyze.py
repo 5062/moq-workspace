@@ -415,6 +415,7 @@ def _write_run_metadata(
                            WHERE tx.direction = 'tx' GROUP BY ALL ORDER BY ALL"""
                     ).fetchall()
                 ),
+                unsent_copies=coverage.unsent_copies(connection),
             ),
             processes=Processes(
                 process_id=connection.execute("SELECT process_id FROM processes WHERE analyzed").fetchone()[0],

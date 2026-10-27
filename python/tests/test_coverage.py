@@ -25,6 +25,18 @@ class CoverageTests(ModelCase):
         with self.assertRaisesRegex(TraceError, "does not have complete packet coverage"):
             coverage.resolve(self.connection)
 
+    def test_a_copy_never_fully_sent_is_left_uncovered_and_counted(self) -> None:
+        self.object_start(1, "rx", 1)
+        self.object_start(2, "tx", 2)
+        self.packet(3, "rx", 1)
+        self.prepare_model()
+        _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
+
+        coverage.resolve(self.connection)
+
+        self.assertEqual(self.connection.execute("SELECT object_trace_id FROM model.coverage").fetchall(), [(1,)])
+        self.assertEqual(coverage.unsent_copies(self.connection), 1)
+
     def test_empty_stream_frames_do_not_open_object_coverage(self) -> None:
         self.object_start(1, "rx", 1)
         self.object_start(2, "tx", 2)

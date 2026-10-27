@@ -81,6 +81,9 @@ class Counts(ArtifactModel):
     # Every outbound copy of a selected object, by how it ended. Copies the relay
     # deliberately did not deliver are counted here, since no metric samples them.
     copy_outcomes: dict[str, int]
+    # Selected copies whose bytes the relay never finished sending before the
+    # recording stopped, such as on a stalled connection. No metric samples them.
+    unsent_copies: int = Field(ge=0)
 
 
 class Processes(ArtifactModel):
