@@ -68,8 +68,8 @@ def _fanout_note(metadata: RunMetadata) -> str:
     notes = []
     if successful < expected:
         notes.append(f"{successful:,}/{expected:,} copies successful")
-    if unsent := metadata.counts.unsent_copies:
-        notes.append(f"{unsent:,} never fully sent")
+    # if unsent := metadata.counts.unsent_copies:
+    #     notes.append(f"{unsent:,} never fully sent")
     return ", ".join(notes)
 
 
