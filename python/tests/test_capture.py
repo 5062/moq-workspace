@@ -48,7 +48,7 @@ class PacketCaptureTests(unittest.IsolatedAsyncioTestCase):
         sizes = await sysctl.socket_buffers(host)
 
         self.assertEqual(sizes, {"rmem_default": 1, "rmem_max": 2, "wmem_default": 3, "wmem_max": 4})
-        self.assertEqual(sysctl.sysctl_command(sizes)[-1], "net.core.wmem_max=4")
+        self.assertEqual(sysctl.sysctl_command(sizes, ["sudo", "-n"])[-1], "net.core.wmem_max=4")
 
     def test_relay_socket_drops_sum_every_socket_on_its_port(self) -> None:
         header = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout"

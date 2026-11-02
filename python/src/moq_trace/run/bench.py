@@ -118,10 +118,12 @@ def parse_sweep(text: str) -> Sweep:
 class BenchResult:
     """Outcome of one run: its artifact or run directory, or the error.
 
-    `value` is the swept dimension's value, when the bench swept one.
+    `value` is the swept dimension's value, when the bench swept one, and `label`
+    names the run in logs and reports.
     """
 
     relay: str
+    label: str
     value: int | None = None
     path: pathlib.Path | None = None
     error: str | None = None
@@ -274,12 +276,12 @@ async def bench(
             label = name if sweep is None else f"{name} {sweep.dimension}={value}"
             _log.info("[%d/%d] %s", index, len(runs), label)
             try:
-                results.append(BenchResult(relay=name, value=value, path=await run(config, pool)))
+                results.append(BenchResult(relay=name, label=label, value=value, path=await run(config, pool)))
             # Broad on purpose: one relay's failure, even a bug, must not cost the
             # relays after it their runs.
             except Exception as error:
                 _log.info("%s failed: %s", label, error, exc_info=not isinstance(error, MoqTraceError))
-                results.append(BenchResult(relay=name, value=value, error=str(error)))
+                results.append(BenchResult(relay=name, label=label, value=value, error=str(error)))
 
     # Each comparison directory and its traced runs, keyed as `plot` keys them:
     # by the subdirectory each run is in.

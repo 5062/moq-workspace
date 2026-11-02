@@ -9,9 +9,10 @@ from __future__ import annotations
 import pathlib
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from .errors import TraceError
+from .metadata import ArtifactModel
 
 # File the runner writes into a run directory to describe its network capture.
 MANIFEST = "network.json"
@@ -23,10 +24,9 @@ QLOG_ENVIRONMENT = "QLOGDIR"
 MONITORING_MANIFEST = "monitoring.json"
 
 
-class MonitoringHost(BaseModel):
+class MonitoringHost(ArtifactModel):
     """Host-local clocks mapped to the relay clock with an explicit error bound."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     host: str
     roles: dict[Literal["relay", "publisher", "subscriber"], int]
     # Host monotonic minus relay monotonic; zero on the relay host.
@@ -36,10 +36,9 @@ class MonitoringHost(BaseModel):
     resource_roles: tuple[Literal["relay", "publisher", "subscriber"], ...] = ()
 
 
-class MonitoringManifest(BaseModel):
+class MonitoringManifest(ArtifactModel):
     """Portable sidecars, including endpoint logs, usable without a live host."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     schema_version: Literal[1] = 1
     hosts: tuple[MonitoringHost, ...]
     start_ns: int = Field(ge=0)
@@ -49,10 +48,9 @@ class MonitoringManifest(BaseModel):
     goodput: bool
 
 
-class ThreadSample(BaseModel):
+class ThreadSample(ArtifactModel):
     """Raw procfs counters of one thread. TID plus start ticks identifies one thread lifetime."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     tid: int = Field(gt=0)
     name: str
     start_ticks: int = Field(ge=0)
@@ -60,10 +58,9 @@ class ThreadSample(BaseModel):
     system_ticks: int = Field(ge=0)
 
 
-class ResourceSample(BaseModel):
+class ResourceSample(ArtifactModel):
     """Raw procfs counters. PID plus start ticks identifies one process lifetime."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     schema_version: Literal[2]
     role: Literal["relay", "publisher", "subscriber"]
     pid: int = Field(gt=0)
@@ -77,10 +74,9 @@ class ResourceSample(BaseModel):
     threads: tuple[ThreadSample, ...] = Field(min_length=1)
 
 
-class DeliverySample(BaseModel):
+class DeliverySample(ArtifactModel):
     """Cumulative payload counters from one reference peer connection."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     schema_version: Literal[1]
     monotonic_ns: int = Field(ge=0)
     pid: int = Field(gt=0)
@@ -89,13 +85,11 @@ class DeliverySample(BaseModel):
     objects: int = Field(ge=0)
 
 
-class NetworkManifest(BaseModel):
+class NetworkManifest(ArtifactModel):
     """What the runner captured beside a trace, and how to place it on the trace clock.
 
     Paths are relative to the manifest's directory, so a run directory can move.
     """
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     relay_port: int = Field(gt=0, le=65_535)
     # CLOCK_REALTIME minus CLOCK_MONOTONIC, sampled when the capture started and

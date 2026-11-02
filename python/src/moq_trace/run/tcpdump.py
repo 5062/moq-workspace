@@ -29,22 +29,33 @@ def take_sudo_password() -> str | None:
     return _sudo_password
 
 
-def packet_capture_command(pcap: str, port: int, user: str, password: bool = False) -> list[str]:
-    """Capture every UDP datagram on `port` whole, on every interface.
+def sudo() -> tuple[list[str], bytes | None]:
+    """The sudo command prefix and the standard input it reads.
 
-    Capturing needs privileges, so tcpdump runs under sudo and drops them to
-    `user` before writing, which keeps the file readable by the analysis. With
-    `password`, sudo reads the password from standard input without prompting;
-    otherwise it must not need one. `LINUX_SLL2` records the interface and
-    direction of each packet, which the analysis needs to count a loopback
-    datagram once. The payloads are captured whole, because analysis decrypts
-    them with the peers' key logs, and a 64 MiB kernel buffer keeps a capture
-    of whole payloads from dropping datagrams, which analysis rejects.
+    With a password, sudo reads it from standard input without prompting;
+    otherwise it must not need one.
     """
 
-    sudo = ["sudo", "-S", "-p", ""] if password else ["sudo", "-n"]
+    password = take_sudo_password()
+    if password is None:
+        return ["sudo", "-n"], None
+    return ["sudo", "-S", "-p", ""], f"{password}\n".encode()
+
+
+def packet_capture_command(pcap: str, port: int, user: str, prefix: list[str]) -> list[str]:
+    """Capture every UDP datagram on `port` whole, on every interface.
+
+    Capturing needs privileges, so tcpdump runs under the sudo `prefix` and drops
+    them to `user` before writing, which keeps the file readable by the analysis.
+    `LINUX_SLL2` records the interface and direction of each packet, which the
+    analysis needs to count a loopback datagram once. The payloads are captured
+    whole, because analysis decrypts them with the peers' key logs, and a 64 MiB
+    kernel buffer keeps a capture of whole payloads from dropping datagrams,
+    which analysis rejects.
+    """
+
     return [
-        *sudo,
+        *prefix,
         "tcpdump",
         "-i",
         "any",
@@ -75,17 +86,16 @@ async def start_packet_capture(host: Host, directory: str, port: int, log: pathl
     Kerberos NFS, so `directory` should be on local disk.
     """
 
-    password = take_sudo_password()
-    command = packet_capture_command(f"{directory}/relay.pcap", port, host.user, password is not None)
-    stdin = None if password is None else f"{password}\n".encode()
+    prefix, stdin = sudo()
+    command = packet_capture_command(f"{directory}/relay.pcap", port, host.user, prefix)
     process = await host.start("tcpdump", command, directory, log, stdin=stdin)
     try:
         await process.wait_for_line(lambda line: "listening on" in line, "tcpdump listening", 10)
     except CaptureError as error:
         await stop_packet_capture(process)
         reason = process.lines[-1] if process.lines else str(error)
-        sudo = "password" in reason or "sudo" in reason
-        hint = f"tcpdump needs sudo: set {SUDO_PASSWORD_ENVIRONMENT} or allow it without a password; " if sudo else ""
+        denied = "password" in reason or "sudo" in reason
+        hint = f"tcpdump needs sudo: set {SUDO_PASSWORD_ENVIRONMENT} or allow it without a password; " if denied else ""
         raise CaptureError(f"packet capture failed: {reason} ({hint}see {log})") from error
     return process
 

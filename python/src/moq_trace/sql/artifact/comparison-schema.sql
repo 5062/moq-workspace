@@ -7,7 +7,6 @@ CREATE TABLE runs (
     run_id UINTEGER NOT NULL,
     label VARCHAR NOT NULL,
     dimension_value BIGINT,
-    repeat UINTEGER NOT NULL,
     database VARCHAR NOT NULL,
     metadata JSON NOT NULL
 );

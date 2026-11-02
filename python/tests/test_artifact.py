@@ -461,8 +461,8 @@ class ArtifactTests(unittest.TestCase):
                     ("ENUM('object', 'packet')", "ENUM('rx', 'tx')"),
                 )
                 self.assertEqual(
-                    artifact.connection.execute("SELECT dimension_value, repeat FROM runs ORDER BY run_id").fetchall(),
-                    [(16, 0), (16, 1)],
+                    artifact.connection.execute("SELECT dimension_value FROM runs ORDER BY run_id").fetchall(),
+                    [(16,), (16,)],
                 )
                 self.assertEqual(
                     artifact.connection.execute("""SELECT run_id, processes.process_id, count(*)

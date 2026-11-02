@@ -239,10 +239,10 @@ class ConfigurationTests(unittest.TestCase):
         self.assertFalse(connected("INFO stats connections=10 subscriptions=0"))
 
     def test_sudo_reads_a_password_from_stdin_only_when_one_is_given(self) -> None:
-        self.assertEqual(tcpdump.packet_capture_command("a.pcap", 4443, "me")[:3], ["sudo", "-n", "tcpdump"])
-        self.assertEqual(
-            tcpdump.packet_capture_command("a.pcap", 4443, "me", password=True)[:5], ["sudo", "-S", "-p", "", "tcpdump"]
-        )
+        with mock.patch.object(tcpdump, "_sudo_password", None):
+            self.assertEqual(tcpdump.sudo(), (["sudo", "-n"], None))
+        with mock.patch.object(tcpdump, "_sudo_password", "s3cret"):
+            self.assertEqual(tcpdump.sudo(), (["sudo", "-S", "-p", ""], b"s3cret\n"))
 
     def test_the_sudo_password_leaves_the_environment(self) -> None:
         with (

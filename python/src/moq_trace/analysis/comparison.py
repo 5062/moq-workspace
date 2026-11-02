@@ -58,7 +58,6 @@ def write_comparison(
         database = pathlib.Path(staging) / output.name
         with duckdb.connect(str(database)) as connection:
             connection.execute(sql.read("artifact/comparison-schema"))
-            repeats: dict[int | None, int] = {}
             entries = []
             first_workload = None
             for run_id, (label, source, value) in enumerate(runs):
@@ -69,15 +68,12 @@ def write_comparison(
                         first_workload = artifact.metadata.workload
                     elif value is None or getattr(artifact.metadata.workload, dimension) != value:
                         raise TraceError(f"run {label!r} does not match comparison dimension {dimension}")
-                    repeat = repeats.get(value, 0) if dimension != "relay" else 0
-                    repeats[value] = repeat + 1
                     connection.execute(
-                        "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO runs VALUES (?, ?, ?, ?, ?)",
                         [
                             run_id,
                             label,
                             value,
-                            repeat,
                             os.path.relpath(source.resolve(), output.parent.resolve()),
                             artifact.metadata.model_dump_json(),
                         ],

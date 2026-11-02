@@ -24,7 +24,7 @@ ComparisonDimension = Literal["subscribers", "object_size", "objects_per_group"]
 
 
 class ArtifactModel(BaseModel):
-    """Base for the metadata an artifact records about itself.
+    """Base for the metadata an artifact records about itself and the manifests it is built from.
 
     Metadata is validated after checking the artifact schema version. A key this
     tool does not know is an error: an artifact written by another version is

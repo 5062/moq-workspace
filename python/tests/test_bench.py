@@ -262,10 +262,6 @@ class BenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "subscribers is swept"):
             sweep = bench.parse_sweep("subscribers=1,2")
             asyncio.run(bench.bench(SUITE, ["alpha"], pathlib.Path("out"), {"subscribers": 2}, None, sweep))
-        flags = ["--relay", "alpha", "--sweep", "subscribers=1,2", "--subscribers", "2"]
-        args = cli.parser().parse_args(["bench", *flags])
-        with self.assertRaisesRegex(ValueError, "--sweep subscribers cannot be combined with --subscribers"):
-            cli._run(args)
 
     def test_relay_list_is_comma_separated(self) -> None:
         self.assertEqual(cli._relays("beta, alpha,beta"), ("beta", "alpha"))

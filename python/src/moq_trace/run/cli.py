@@ -313,9 +313,6 @@ def _run(args: argparse.Namespace) -> None:
 
         names = [*_BENCH_SETTINGS, *_BENCH_SWITCHES]
         settings = {name: getattr(args, name) for name in names if getattr(args, name) is not None}
-        if args.sweep is not None and args.sweep.dimension in settings:
-            flag = args.sweep.dimension.replace("_", "-")
-            raise ValueError(f"--sweep {args.sweep.dimension} cannot be combined with --{flag}")
         settings["trace"] = args.trace
         if args.hosts is not None:
             settings["hosts"] = _model(args.hosts, Hosts)
@@ -333,16 +330,11 @@ def _run(args: argparse.Namespace) -> None:
         except ValidationError as error:
             raise ValueError(str(error)) from error
         for result in results:
-            name = result.relay if result.value is None else f"{result.relay} {args.sweep.dimension}={result.value}"
             if result.error is None:
-                print(f"{name}: {result.path}")
+                print(f"{result.label}: {result.path}")
             else:
-                print(f"{name}: error: {result.error}", file=sys.stderr)
-        failed = [
-            result.relay if result.value is None else f"{result.relay} {args.sweep.dimension}={result.value}"
-            for result in results
-            if result.error is not None
-        ]
+                print(f"{result.label}: error: {result.error}", file=sys.stderr)
+        failed = [result.label for result in results if result.error is not None]
         if failed:
             raise ExperimentError(f"{len(failed)} of {len(results)} relay runs failed: {', '.join(failed)}")
 
