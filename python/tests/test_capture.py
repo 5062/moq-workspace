@@ -12,7 +12,7 @@ from run_support import FakeRemote, command_set, peer, placement_for
 from moq_trace.errors import CaptureError
 from moq_trace.manifest import MANIFEST, read_manifest
 from moq_trace.metadata import CommandSet
-from moq_trace.run import capture, experiment, placement, sysctl, tcpdump
+from moq_trace.run import capture, experiment, monitoring, placement, sysctl, tcpdump
 from moq_trace.run.config import ExperimentConfig, HostConfig, Hosts, Sync
 from moq_trace.run.experiment import ExperimentError
 
@@ -36,12 +36,19 @@ class PacketCaptureTests(unittest.IsolatedAsyncioTestCase):
         host.start = mock.AsyncMock()
         host.start.return_value.wait = mock.AsyncMock(return_value=0)
         with mock.patch.object(tcpdump, "_sudo_password", "s3cret"):
-            await sysctl.set_socket_buffers(host, 8_388_608, "/tmp/run", pathlib.Path("sysctl.log"))
+            await sysctl.set_socket_buffers(host, sysctl.RUN_BUFFERS, "/tmp/run", pathlib.Path("sysctl.log"))
 
         _name, argv, _cwd, _log = host.start.call_args.args
         self.assertEqual(host.start.call_args.kwargs["stdin"], b"s3cret\n")
         self.assertNotIn("s3cret", " ".join(argv))
         self.assertEqual(argv[4:7], ["sysctl", "-w", "net.core.rmem_default=8388608"])
+
+    async def test_each_socket_buffer_is_read_by_name_so_it_can_be_restored(self) -> None:
+        host = mock.Mock(run=mock.AsyncMock(return_value="1\n2\n3\n4\n"))
+        sizes = await sysctl.socket_buffers(host)
+
+        self.assertEqual(sizes, {"rmem_default": 1, "rmem_max": 2, "wmem_default": 3, "wmem_max": 4})
+        self.assertEqual(sysctl.sysctl_command(sizes)[-1], "net.core.wmem_max=4")
 
     def test_relay_socket_drops_sum_every_socket_on_its_port(self) -> None:
         header = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout"
@@ -57,6 +64,29 @@ class PacketCaptureTests(unittest.IsolatedAsyncioTestCase):
             capture.udp_drops(tables, 4444)
 
 
+class MonitoringClockTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_host_offset_is_its_clock_minus_the_relays(self) -> None:
+        def host(ahead_ns: int) -> mock.Mock:
+            async def read(_script: str) -> str:
+                return str(time.clock_gettime_ns(time.CLOCK_MONOTONIC) + ahead_ns)
+
+            stand_in = mock.Mock(python="python3", run=read)
+            stand_in.name = "host"
+            return stand_in
+
+        relay, peer = host(5_000_000_000), host(12_000_000_000)
+        where = mock.Mock(relay=relay, host={"relay": relay, "subscriber": peer}.__getitem__)
+        config = ExperimentConfig(
+            output=pathlib.Path("run"), relay_args=(), protocol="moq-transport-16", monitor_resources=False
+        )
+        monitor = monitoring.Monitoring(config, where, {"relay": mock.Mock(pid=1), "subscriber": mock.Mock(pid=2)})
+        await monitor.start()
+
+        relay_entry, peer_entry = monitor.hosts
+        self.assertEqual(relay_entry.offset_ns, 0)
+        self.assertAlmostEqual(peer_entry.offset_ns, 7_000_000_000, delta=peer_entry.uncertainty_ns)
+
+
 class CaptureTests(unittest.IsolatedAsyncioTestCase):
     """Run the capture with local stand-in roles and recorded remote hosts."""
 
@@ -64,6 +94,8 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         self.root = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(mock.patch.object(placement, "RemoteHost", FakeRemote))
         self.buffers = self.enterContext(mock.patch.object(capture, "set_socket_buffers", autospec=True))
+        self.original = {"rmem_max": 1}
+        self.enterContext(mock.patch.object(capture, "socket_buffers", autospec=True, return_value=self.original))
 
     def _config(self, **overrides) -> ExperimentConfig:
         fields = {
@@ -237,14 +269,27 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(f"keylog={config.output}/publisher.keylog", (config.output / "publisher.log").read_text())
         self.assertIn((remote, ["subscriber.keylog"]), where.subscriber.fetched)
 
-    async def test_every_host_gets_run_buffers_before_the_relay_and_defaults_after_the_peers(self) -> None:
+    async def test_every_host_gets_run_buffers_before_the_relay_and_its_own_back_after_the_peers(self) -> None:
         config = self._config(trace=False, hosts=Hosts(subscriber=self._remote("peer")), relay_url="https://r:4443")
         where, _ = await self._capture(config)
 
         sizes = [(call.args[0], call.args[1]) for call in self.buffers.call_args_list]
-        run, default = sysctl.RUN_BUFFER_BYTES, sysctl.DEFAULT_BUFFER_BYTES
+        run, original = sysctl.RUN_BUFFERS, self.original
         relay, peer = where.relay, where.subscriber
-        self.assertEqual(sizes, [(relay, run), (peer, run), (peer, default), (relay, default)])
+        self.assertEqual(sizes, [(relay, run), (peer, run), (peer, original), (relay, original)])
+
+    async def test_the_publisher_stops_before_the_subscribers(self) -> None:
+        stops = self.root / "stops"
+
+        def role(name: str, gauges: str) -> tuple[str, ...]:
+            body = f"trap 'echo {name} >> {stops}; exit 0' INT; echo {gauges}; while :; do sleep 0.02; done"
+            return ("sh", "-c", body)
+
+        publisher = role("publisher", "connections=1 subscriptions=0")
+        subscriber = role("subscriber", "connections=1 subscriptions=1")
+        await self._capture(self._config(trace=False), command_set(publisher=publisher, subscriber=subscriber))
+
+        self.assertEqual(stops.read_text().split(), ["publisher", "subscriber"])
 
     async def test_a_startup_delay_replaces_the_log_marker(self) -> None:
         config = self._config(trace=False, relay_ready_log="", relay_startup_seconds=1)
@@ -274,7 +319,7 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         with mock.patch.object(FakeRemote, "build", autospec=True) as build:
             await placement_for(config).sync()
 
-        synced = {(call.args[0].name, call.args[1]): call.args[2].splitlines()[-2] for call in build.await_args_list}
+        synced = {(call.args[0].name, call.args[1]): call.args[2].splitlines()[-3] for call in build.await_args_list}
         # The publisher shares the relay's host and checkout, so that host syncs
         # once with the relay's submodules as well as its own.
         self.assertEqual(

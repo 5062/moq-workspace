@@ -89,9 +89,11 @@ async def _capture(config: ExperimentConfig, command: CommandSet, placement: Pla
         monitors = await capture.start_monitoring()
         await _wait_for_workload((relay, subscriber, publisher, *monitors), _run_seconds(config))
         await capture.stop_monitoring()
-        _log.info("workload finished; stopping the subscriber, publisher and relay")
-        await subscriber.stop(True)
+        _log.info("workload finished; stopping the publisher, subscriber and relay")
+        # Objects published while subscribers exit reach too few of them, and the
+        # cooldown only trims so far back from the last inbound object.
         await publisher.stop(True)
+        await subscriber.stop(True)
         await capture.sample_socket_drops()
         await relay.stop(config.relay_graceful_stop)
         return await capture.finish()

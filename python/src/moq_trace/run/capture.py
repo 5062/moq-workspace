@@ -19,7 +19,7 @@ from . import tls
 from .config import ExperimentConfig
 from .monitoring import Monitoring
 from .placement import ROLES, Placement
-from .sysctl import DEFAULT_BUFFER_BYTES, RUN_BUFFER_BYTES, set_socket_buffers
+from .sysctl import RUN_BUFFERS, set_socket_buffers, socket_buffers
 from .tcpdump import start_packet_capture, stop_packet_capture
 
 _log = logging.getLogger(__name__)
@@ -139,10 +139,11 @@ class CaptureSession:
             _log.info("setting socket buffers on %s", host.name)
             directory = self.placement.directory(host)
             name = host.name.replace("/", "_")
-            await set_socket_buffers(host, RUN_BUFFER_BYTES, directory, self.output / f"sysctl-{name}.log")
+            original = await socket_buffers(host)
+            await set_socket_buffers(host, RUN_BUFFERS, directory, self.output / f"sysctl-{name}.log")
             # Registered first, so it runs after every role process has closed.
             self.cleanup.push_async_callback(
-                set_socket_buffers, host, DEFAULT_BUFFER_BYTES, directory, self.output / f"sysctl-reset-{name}.log"
+                set_socket_buffers, host, original, directory, self.output / f"sysctl-reset-{name}.log"
             )
         self.clock = await self.relay.clock()
         directories = [self.directory, f"{self.directory}/qlog"] if self.config.qlog else [self.directory]

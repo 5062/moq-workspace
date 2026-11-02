@@ -77,6 +77,44 @@ class SyncScriptTests(unittest.TestCase):
             self._sync(checkout)
         self.assertEqual((checkout / "README").read_text(), "edited on the host\n")
 
+    def test_an_edit_the_new_commit_does_not_touch_still_stops_the_run(self) -> None:
+        for edited in ("README", "wanted/lib.txt"):
+            with self.subTest(edited):
+                checkout = self.root / edited.replace("/", "-")
+                self._sync(checkout)
+                (checkout / edited).write_text("edited on the host\n")
+                (self.origin / "other").write_text(f"{edited}\n")
+                _git(self.origin, "add", "other")
+                _git(self.origin, "commit", "--quiet", "-m", "elsewhere")
+
+                with self.assertRaises(subprocess.CalledProcessError) as stopped:
+                    self._sync(checkout)
+                self.assertIn(b"local changes", stopped.exception.stderr)
+                self.assertEqual((checkout / edited).read_text(), "edited on the host\n")
+
+    def test_a_submodule_this_run_does_not_use_may_be_behind(self) -> None:
+        checkout = self.root / "host"
+        self._sync(checkout)
+        _git(checkout, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--quiet", "unwanted")
+        (self.unwanted / "lib.txt").write_text("newer\n")
+        _git(self.unwanted, "commit", "--quiet", "-am", "newer")
+        _git(self.origin, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--quiet", "unwanted")
+        _git(self.origin / "unwanted", "pull", "--quiet", "origin", "HEAD")
+        _git(self.origin, "commit", "--quiet", "-am", "bump unwanted")
+
+        self._sync(checkout)
+
+        self.assertEqual(_git(checkout, "rev-parse", "HEAD"), _git(self.origin, "rev-parse", "HEAD"))
+
+    def test_a_checkout_left_empty_by_a_failed_fetch_recovers(self) -> None:
+        checkout = self.root / "host"
+        checkout.mkdir()
+        _git(checkout, "clone", "--quiet", "--no-checkout", str(self.origin), ".")
+
+        self._sync(checkout)
+
+        self.assertEqual((checkout / "README").read_text(), "one\n")
+
 
 class RevisionTests(unittest.TestCase):
     """The commit remote hosts are brought to is the controller's, and only a clean one."""

@@ -26,9 +26,9 @@ BENCH_BINARY = "moq-bench/target/release/moq-bench"
 def sync_script(sync: Sync, submodules: list[str]) -> str:
     """Bring the working directory to `sync.revision`, cloning it first when empty.
 
-    Runs in the checkout, which `Host.start` creates. A checkout with local changes
-    fails the checkout rather than losing them, and only `submodules` are
-    initialized, recursively, so a host never fetches a relay it does not run.
+    Runs in the checkout, which `Host.start` creates. Local changes fail the script
+    rather than being lost or built, and only `submodules` are initialized,
+    recursively, so a host never fetches a relay it does not run.
     """
 
     revision = shlex.quote(sync.revision)
@@ -38,11 +38,16 @@ def sync_script(sync: Sync, submodules: list[str]) -> str:
         f"git cat-file -e {revision}^{{commit}} 2>/dev/null || git fetch --quiet origin {revision}",
         f"git -c advice.detachedHead=false checkout --quiet --detach {revision}",
     ]
+    # `git checkout` carries an edit to a file both commits share, so it reports
+    # nothing. A submodule this run does not use may rightly sit at an older commit.
+    unchanged = "git diff --quiet --ignore-submodules=all HEAD"
     if submodules:
         lines += [
             "git submodule sync --quiet --recursive",
             f"git submodule update --init --recursive -- {shlex.join(submodules)}",
         ]
+        unchanged += f" && git diff --quiet --ignore-submodules=untracked HEAD -- {shlex.join(submodules)}"
+    lines.append(f"{unchanged} || {{ echo 'this checkout has local changes' >&2; exit 1; }}")
     lines.append("git log -1 --format='at %h %s'")
     return "\n".join(lines)
 

@@ -26,7 +26,7 @@ from moq_trace.plot import (
 from moq_trace.plot.breakdown import _row_summary
 from moq_trace.plot.common import copy_rows, draw_distribution
 from moq_trace.plot.processing import _per_object_us
-from moq_trace.plot.render import _describe
+from moq_trace.plot.render import _describe, _fanout_note
 from moq_trace.plot.segments import _segments
 
 SUBTITLE = "unpinned | 1 subscriber | 1024 bytes | 30 fps | test"
@@ -320,6 +320,12 @@ class SubtitleTests(unittest.TestCase):
     def test_the_subtitle_names_the_relay_cpu_only_when_pinned(self) -> None:
         self.assertEqual(_describe(run_metadata()), "unpinned | 1 subscriber | 1024 bytes")
         self.assertEqual(_describe(run_metadata(relay_cpu=3)), "pinned CPU 3 | 1 subscriber | 1024 bytes")
+
+    def test_the_note_names_copies_that_were_never_fully_sent(self) -> None:
+        metadata = run_metadata()
+        counts = metadata.counts.model_copy(update={"unsent_copies": 1_420})
+
+        self.assertIn("1,420 never fully sent", _fanout_note(metadata.model_copy(update={"counts": counts})))
 
 
 if __name__ == "__main__":
