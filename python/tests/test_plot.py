@@ -10,6 +10,7 @@ import numpy
 from matplotlib import pyplot as plt
 from support import run_metadata
 
+from moq_trace.analysis import sql
 from moq_trace.analysis.phases import Phase
 from moq_trace.plot import (
     PlotRun,
@@ -190,6 +191,45 @@ class RunPlotTests(unittest.TestCase):
             self.assertEqual([text.get_text() for text in figure.axes[0].get_legend().texts], ["RX", "TX #1", "TX #3"])
         finally:
             plt.close(figure)
+
+    def test_timeline_charges_other_connections_work_on_the_copys_threads_until_its_last_work(self) -> None:
+        connection = duckdb.connect(":memory:")
+        try:
+            connection.execute("CREATE SCHEMA model")
+            connection.execute(
+                """CREATE TABLE model.objects(trace_id UBIGINT, rx_trace_id UBIGINT, copy_ordinal UINTEGER,
+                session_id UBIGINT, connection_id UBIGINT, start_ns BIGINT, tid UBIGINT)"""
+            )
+            connection.execute("CREATE TABLE model.packets(trace_id UBIGINT, connection_id UBIGINT)")
+            connection.execute("CREATE TABLE model.coverage_packets(object_trace_id UBIGINT, packet_trace_id UBIGINT)")
+            connection.execute(
+                """CREATE TABLE model.intervals(subject VARCHAR, trace_id UBIGINT, phase VARCHAR,
+                start_ns BIGINT, end_ns BIGINT, tid UBIGINT)"""
+            )
+            # Object 1 arrives on connection 9; copies 2 and 3 leave on connections 1 and 3.
+            connection.execute(
+                "INSERT INTO model.objects VALUES (1, NULL, NULL, 20, 9, 0, 8), (2, 1, 0, 21, 1, 10000, 7), "
+                "(3, 1, 1, 22, 3, 10000, 8)"
+            )
+            connection.execute("INSERT INTO model.packets VALUES (100, 1), (101, 2), (102, 2), (103, 1), (104, 3)")
+            connection.execute("INSERT INTO model.coverage_packets VALUES (2, 100), (3, 104)")
+            connection.execute("""INSERT INTO model.intervals VALUES
+                ('object', 2, 'clone', 10000, 20000, 7),
+                ('packet', 100, 'frame_encode', 90000, 100000, 7),
+                ('packet', 101, 'frame_encode', 0, 60000, 7),
+                ('packet', 101, 'send_queue', 60000, 95000, 7),
+                ('packet', 102, 'frame_encode', 150000, 160000, 7),
+                ('packet', 103, 'frame_encode', 70000, 80000, 7),
+                ('object', 3, 'clone', 10000, 20000, 8),
+                ('packet', 104, 'frame_encode', 30000, 40000, 8),
+                ('object', 1, 'payload_read', 25000, 35000, 8)""")
+            rows = connection.execute(sql.read("timeline/busy"), {"rx": 1, "origin": 0, **timeline._WORK}).fetchall()
+        finally:
+            connection.close()
+        # Clipped to the copy's start; the wait, the later packet, the copy's own
+        # connection, and the other thread are left out.
+        self.assertEqual(rows, [(21, 10.0, 60.0), (22, 25.0, 35.0)])
+        self.assertEqual(timeline._union([(5.0, 9.0), (0.0, 2.0), (1.0, 3.0)]), [(0.0, 3.0), (5.0, 9.0)])
 
     def test_breakdown_sums_repeated_phases_within_a_unit(self) -> None:
         connection = _artifact(packet_phases=True)

@@ -48,6 +48,27 @@ class _Timeline:
     last_copy: _Copy
 
 
+#: The row of work a copy's threads did for other connections while it was sent.
+_BUSY = "thread_busy"
+#: The work phases the busy query counts, by subject.
+_WORK = {
+    f"{subject}_work": [phase.name for phase in phases.PHASES if phase.subject == subject and not phase.wait]
+    for subject in ("object", "packet")
+}
+
+
+def _union(spans: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Merge overlapping spans into disjoint ones, in start order."""
+
+    merged: list[tuple[float, float]] = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 def _timelines(connection: duckdb.DuckDBPyConnection) -> tuple[_Timeline, ...]:
     """Query selected lifecycles and intervals, converting nanoseconds for drawing."""
 
@@ -61,6 +82,16 @@ def _timelines(connection: duckdb.DuckDBPyConnection) -> tuple[_Timeline, ...]:
             ).fetchall()
         ]
         intervals = connection.execute(sql.read("timeline/intervals"), {"rx": rx_trace_id, "origin": origin}).fetchall()
+        busy: dict[int, list[tuple[float, float]]] = {}
+        for session, start, end in connection.execute(
+            sql.read("timeline/busy"), {"rx": rx_trace_id, "origin": origin, **_WORK}
+        ).fetchall():
+            busy.setdefault(int(session), []).append((float(start), float(end)))
+        intervals += [
+            ("tx", session, _BUSY, occurrence, start, end)
+            for session, spans in busy.items()
+            for occurrence, (start, end) in enumerate(_union(spans))
+        ]
         timelines.append(
             _Timeline(
                 statistic=statistic,
@@ -94,17 +125,12 @@ def _active_time_us(intervals: tuple[_Interval, ...]) -> float | None:
     """
 
     work = {(phase.direction, phase.name) for phase in phases.OBJECT_PHASES if not phase.wait}
-    spans = sorted(
+    spans = [
         (interval.start_us, interval.end_us) for interval in intervals if (interval.direction, interval.phase) in work
-    )
+    ]
     if not spans:
         return None
-    total = 0.0
-    end = spans[0][0]
-    for start, finish in spans:
-        total += max(0.0, finish - max(start, end))
-        end = max(end, finish)
-    return total
+    return sum(end - start for start, end in _union(spans))
 
 
 def _rebase(timeline: _Timeline) -> _Timeline:
@@ -165,6 +191,8 @@ def plot_object_timelines(
     present = {(interval.direction, interval.phase) for timeline in timelines for interval in timeline.intervals}
     rx_quic_rows = tuple(row for row in rx_quic_rows if row[:2] in present)
     tx_quic_rows = tuple(row for row in tx_quic_rows if row[:2] in present)
+    if ("tx", _BUSY) in present:
+        tx_quic_rows += (("tx", _BUSY, "TX Thread: Other Connections", False),)
     # Work rows stay put so stacks line up; a wait row appears only when waited.
     moq_rows = tuple(row for row in moq_rows if not row[3] or row[:2] in present)
     phase_rows = rx_quic_rows + moq_rows + tx_quic_rows
@@ -201,6 +229,7 @@ def plot_object_timelines(
             for index, session_id in enumerate(tx_sessions)
         }
         phase_labels: dict[tuple[str, int, str], tuple[float, float, float]] = {}
+        busy_bars: dict[tuple[float, float, object], list[tuple[float, float]]] = {}
 
         for interval in timeline.intervals:
             if interval.direction == "tx" and interval.session_id not in copy_by_session:
@@ -222,19 +251,29 @@ def plot_object_timelines(
             # A wait is an unfilled, hatched bar in the copy's color, so it reads as
             # time spent waiting rather than as work.
             wait = key in waits
-            axis.broken_barh(
-                [(interval.start_us, interval.end_us - interval.start_us)],
-                (y - height / 2, height),
-                facecolors="none" if wait else color,
-                edgecolors=color if wait else "#334155",
-                hatch="////" if wait else None,
-                linewidth=0.7,
-                alpha=0.88,
-            )
+            if interval.phase == _BUSY:
+                # A busy thread can do thousands of other spans per copy, so they draw in one call below.
+                busy_bars.setdefault((y, height, color), []).append(
+                    (interval.start_us, interval.end_us - interval.start_us)
+                )
+            else:
+                axis.broken_barh(
+                    [(interval.start_us, interval.end_us - interval.start_us)],
+                    (y - height / 2, height),
+                    facecolors="none" if wait else color,
+                    edgecolors=color if wait else "#334155",
+                    hatch="////" if wait else None,
+                    linewidth=0.7,
+                    alpha=0.88,
+                )
             duration_us = interval.end_us - interval.start_us
             label_key = (interval.direction, interval.session_id, interval.phase)
             previous_total, previous_end, _ = phase_labels.get(label_key, (0.0, interval.end_us, y))
             phase_labels[label_key] = (previous_total + duration_us, max(previous_end, interval.end_us), y)
+
+        # Other connections' work is a faint, borderless bar: it is not this copy's work.
+        for (y, height, color), bars in busy_bars.items():
+            axis.broken_barh(bars, (y - height / 2, height), facecolors=color, edgecolors="none", alpha=0.55)
 
         for total_us, end_us, y in phase_labels.values():
             axis.annotate(
@@ -292,7 +331,8 @@ def plot_object_timelines(
         "MoQ latency: RX start to latest TX completion. "
         "Active time: union of non-wait MoQ phases across RX and all TX copies.\n"
         "Active time measures traced wall-clock time. "
-        "Bar labels: summed phase durations (µs), counting overlaps separately.",
+        "Bar labels: summed phase durations (µs), counting overlaps separately. "
+        "Thread row: work for other connections on the threads that did the copy's work.",
         ha="center",
         fontsize=8,
     )
