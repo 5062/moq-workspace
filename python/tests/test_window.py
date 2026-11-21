@@ -79,8 +79,8 @@ class WindowAndProcessTests(ModelCase):
         self.object_start(2, "tx", 2)
         self.unfinished_object(3, 900_000)
         self.prepare_model()
-        _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
-        self.connection.execute("UPDATE model.window SET end_ns = 500_000")
+        with self.assertNoLogs("moq_trace.analysis.analyze", level="WARNING"):
+            _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
 
         sql.check(self.connection, "checks/window")
 
@@ -109,16 +109,22 @@ class WindowAndProcessTests(ModelCase):
         with self.assertRaisesRegex(TraceError, "logical objects do not have exactly one ingress lifecycle: 1"):
             self.prepare_model()
 
-    def test_a_lifecycle_unfinished_inside_the_window_is_rejected(self) -> None:
+    def test_unfinished_objects_warn_and_stay_out_of_latency_samples(self) -> None:
         self.object_start(1, "rx", 1)
         self.object_start(2, "tx", 2)
-        self.unfinished_object(3, 150_000)
+        self.unfinished_object(3, 100_000)
+        self.object_start(4, "tx", 4)
+        self.connection.execute("UPDATE raw.moq_object_start SET timestamp_ns = 100_000 WHERE trace_id = 4")
+        self.connection.execute("DELETE FROM raw.moq_object_end WHERE trace_id = 4")
+        self.reset_copy(5)
         self.prepare_model()
-        _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
-        self.connection.execute("UPDATE model.window SET end_ns = 500_000")
 
-        with self.assertRaisesRegex(TraceError, "object starts without completions inside the analysis window"):
-            sql.check(self.connection, "checks/window")
+        with self.assertLogs("moq_trace.analysis.analyze", level="WARNING") as logs:
+            _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
+
+        sql.check(self.connection, "checks/window")
+        self.assertIn("2 object lifecycles started in the analysis window have no completion", logs.output[0])
+        self.assertEqual(self.connection.execute("SELECT tx_trace_id FROM selected_copies").fetchall(), [(2,)])
 
     def test_phases_cut_off_after_the_window_are_accepted(self) -> None:
         self.object_start(1, "rx", 1)

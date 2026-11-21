@@ -190,7 +190,8 @@ def _select_window(
 
     A copy accounts for its subscriber once it was delivered or deliberately not
     delivered. A deficit after the window opens is reported as a warning. Only
-    the delivered copies carry latency samples.
+    delivered copies of completed inbound objects carry latency samples. Object
+    lifecycles with no recorded completion are kept in the raw events.
     """
 
     connection.execute(sql.read("window/inbound-stage"), {"undelivered": list(_UNDELIVERED), "size": object_size})
@@ -208,6 +209,17 @@ def _select_window(
     connection.execute(sql.read("window/selected-stage"), {"start": start, "end": end})
     if _count(connection, "SELECT count(*) FROM selected_rx") == 0:
         raise TraceError("steady-state window contains no complete objects")
+    unfinished = _count(
+        connection,
+        "SELECT count(*) FROM moq_object_start ANTI JOIN moq_object_end USING (trace_id) "
+        "WHERE timestamp_ns BETWEEN ? AND ?",
+        [start, end],
+    )
+    if unfinished:
+        _log.warning(
+            "%d object lifecycles started in the analysis window have no completion and carry no latency samples",
+            unfinished,
+        )
     bad = _count(
         connection,
         "SELECT count(*) FROM inbound_objects WHERE start_ns BETWEEN ? AND ? AND copies > ?",

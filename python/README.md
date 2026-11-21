@@ -287,8 +287,10 @@ local development and testing artifacts.
 After the steady-state window opens, incomplete fanout produces a warning rather
 than failing analysis. The artifact keeps every selected inbound object and the
 outcomes of its recorded copies; an absent copy is not labeled as dropped.
-Latency statistics use successful copies only. Run and comparison figures show
-the successful copy count against the expected fanout when it is incomplete.
+Object starts in the window without a recorded completion produce a warning
+and remain available in the raw events. Latency statistics use successful
+copies of completed inbound objects. Run and comparison figures show the
+successful copy count against the expected fanout when it is incomplete.
 Excess fanout and invalid trace boundaries still fail validation.
 
 ### Figures

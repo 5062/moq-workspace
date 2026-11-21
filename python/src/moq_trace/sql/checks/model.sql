@@ -30,10 +30,8 @@ FROM packet_phase_intervals AS application JOIN packet_phase_intervals AS other 
 WHERE application.phase = 'application' AND other.span_id <> application.span_id
   AND other.start_ns < application.end_ns AND application.start_ns < other.end_ns
 UNION ALL
--- Ingress starts are counted, because the relay is killed while it still
--- receives objects whose copies already ended. `checks/window` rejects an open
--- lifecycle inside the window, and copies of an open ingress carry no
--- `rx_trace_id`.
+-- A copy can finish while its inbound object never records a completion.
+-- Count ingress starts to check identity even when that copy has no rx_trace_id.
 SELECT 'logical objects do not have exactly one ingress lifecycle', count(*)
 FROM (
   SELECT logical_group, logical_frame, count(*) FILTER (direction = 'rx') AS ingress
