@@ -178,6 +178,7 @@ def _select_window(
     subscribers: int,
     warmup_seconds: float,
     cooldown_seconds: float,
+    workload_bounds: tuple[int, int] | None = None,
 ) -> int:
     """Select the steady-state window and return the trace origin.
 
@@ -186,7 +187,8 @@ def _select_window(
     subscribers attaching: measured from there, a run would report objects with
     missing copies that no subscriber was ever meant to get. The ``warmup``
     margin then trims further from that steady-state opening, and ``cooldown``
-    trims the tail.
+    trims the tail. If no object reached full fanout, the runner's recorded
+    workload bounds provide an already-trimmed window after readiness.
 
     A copy accounts for its subscriber once it was delivered or deliberately not
     delivered. A deficit after the window opens is reported as a warning. Only
@@ -201,10 +203,15 @@ def _select_window(
     if origin is None:
         raise TraceError(f"trace has no completed {object_size}-byte inbound objects")
     if steady is None:
-        raise TraceError(f"trace has no {object_size}-byte inbound object copied to all {subscribers} subscribers")
+        message = f"trace has no {object_size}-byte inbound object copied to all {subscribers} subscribers"
+        if workload_bounds is None:
+            raise TraceError(message)
+        start, end = workload_bounds
+        _log.warning("%s; using the recorded workload window", message)
+    else:
+        start = min(int(steady) + round(warmup_seconds * 1_000_000_000), 2**63 - 1)
+        end = max(int(last) - round(cooldown_seconds * 1_000_000_000), 0)
 
-    start = min(int(steady) + round(warmup_seconds * 1_000_000_000), 2**63 - 1)
-    end = max(int(last) - round(cooldown_seconds * 1_000_000_000), 0)
     connection.execute("INSERT INTO model.window VALUES (?, ?, ?)", [origin, start, end])
     connection.execute(sql.read("window/selected-stage"), {"start": start, "end": end})
     if _count(connection, "SELECT count(*) FROM selected_rx") == 0:
@@ -467,19 +474,20 @@ def run(
     rejects a capture that reaches beyond the processes it should hold.
 
     `workload` names the object size and fan-out to select, and `window` the
-    margins to trim. The window opens at the first inbound object every
-    subscriber received, so a capture that starts before the subscribers attach
-    is measured from the steady state. Both are recorded in the artifact as
-    given, so their optional fields carry whatever the caller knows about the
-    run, as do `protocol`, `relay_cpu`, `binaries`, and `commands`.
+    margins to trim. The first inbound object with full fanout anchors the
+    window after subscribers attach. Both inputs are recorded in the artifact
+    as given, so their optional fields carry whatever the caller knows about
+    the run, as do `protocol`, `relay_cpu`, `binaries`, and `commands`.
 
     `network` names the manifest of a packet capture and qlog taken beside the
     trace. Their measurements are placed on the same time axis as the latency
-    samples.
+    samples. `monitoring` supplies the runner's already-trimmed workload window
+    if no object in the trace reached full fanout.
     """
 
     if output.exists():
         raise TraceError(f"analysis database already exists: {output}")
+    monitoring_manifest = None if monitoring is None else monitoring_capture.read_manifest(monitoring)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".moq-trace-analysis-", dir=output.parent) as staging_name:
         staging = pathlib.Path(staging_name)
@@ -495,6 +503,9 @@ def run(
                 subscribers=workload.subscribers,
                 warmup_seconds=window.warmup_seconds,
                 cooldown_seconds=window.cooldown_seconds,
+                workload_bounds=(monitoring_manifest.start_ns, monitoring_manifest.end_ns)
+                if monitoring_manifest is not None
+                else None,
             )
             sql.check(connection, "checks/window")
             coverage.resolve(connection)
@@ -502,11 +513,12 @@ def run(
             capabilities = None if network is None else _ingest_network(connection, network, origin)
             _define_metrics(connection)
             connection.execute(sql.read("monitoring/schema"))
-            if monitoring is not None:
+            if monitoring is not None and monitoring_manifest is not None:
                 start, end = connection.execute("SELECT start_ns, end_ns FROM model.window").fetchone()
                 monitoring_capture.ingest(
                     connection,
                     monitoring,
+                    monitoring_manifest,
                     origin_ns=origin,
                     start_ns=start,
                     end_ns=end,

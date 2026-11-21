@@ -86,7 +86,15 @@ class MonitoringTests(unittest.TestCase):
         (self.root / "subscriber.log").write_text(
             "readiness log\n" + "".join("MOQ_BENCH_DELIVERY " + json.dumps(row) + "\n" for row in self.deliveries)
         )
-        monitoring.ingest(self.db, self.path, origin_ns=0, start_ns=1_000_000_000, end_ns=5_000_000_000, subscribers=2)
+        monitoring.ingest(
+            self.db,
+            self.path,
+            monitoring.read_manifest(self.path),
+            origin_ns=0,
+            start_ns=1_000_000_000,
+            end_ns=5_000_000_000,
+            subscribers=2,
+        )
 
     def test_real_intervals_process_identity_remote_clock_fanout_and_offline_plot(self):
         self._ingest()

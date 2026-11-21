@@ -155,9 +155,19 @@ def _read_deliveries(
         raise ValueError("missing delivered payload counters; rebuild reference peers or disable monitor_goodput")
 
 
+def read_manifest(path: pathlib.Path) -> MonitoringManifest:
+    """Read and validate the recorded workload and monitoring hosts."""
+
+    try:
+        return MonitoringManifest.model_validate_json(path.read_text())
+    except (OSError, ValueError) as error:
+        raise TraceError(f"failed to read monitoring {path}: {error}") from error
+
+
 def ingest(
     connection: duckdb.DuckDBPyConnection,
     path: pathlib.Path,
+    manifest: MonitoringManifest,
     *,
     origin_ns: int,
     start_ns: int,
@@ -168,7 +178,6 @@ def ingest(
     """Validate identities and counters before deriving actual-interval rates."""
 
     try:
-        manifest = MonitoringManifest.model_validate_json(path.read_text())
         if end_ns <= start_ns:
             raise ValueError("monitoring window must have positive duration")
         if subscribers is not None and manifest.subscribers != subscribers:
@@ -232,17 +241,21 @@ def materialize(connection: duckdb.DuckDBPyConnection) -> None:
 def write_summary(path: pathlib.Path, database: pathlib.Path | None = None) -> None:
     """Keep a human-readable summary even for untraced runs."""
 
-    try:
-        manifest = MonitoringManifest.model_validate_json(path.read_text())
-    except (OSError, ValueError) as error:
-        raise TraceError(f"failed to read monitoring {path}: {error}") from error
+    manifest = read_manifest(path)
     if database is not None:
         with open_artifact(database, "run") as artifact:
             _write_summary(artifact.connection, path, manifest)
     else:
         with duckdb.connect(":memory:") as connection:
             connection.execute(sql.read("monitoring/schema"))
-            ingest(connection, path, origin_ns=manifest.start_ns, start_ns=manifest.start_ns, end_ns=manifest.end_ns)
+            ingest(
+                connection,
+                path,
+                manifest,
+                origin_ns=manifest.start_ns,
+                start_ns=manifest.start_ns,
+                end_ns=manifest.end_ns,
+            )
             _write_summary(connection, path, manifest)
 
 

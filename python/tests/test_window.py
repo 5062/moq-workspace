@@ -199,12 +199,36 @@ class WindowAndProcessTests(ModelCase):
         )
 
     def test_window_requires_an_object_for_every_subscriber(self) -> None:
-        # No inbound object reaches the subscriber, so there is no steady state to measure.
+        # Without a recorded workload window, an incomplete fanout cannot establish readiness.
         self.object_start(1, "rx", 1)
 
         self.prepare_model()
         with self.assertRaisesRegex(TraceError, "copied to all 1 subscribers"):
             _select_window(self.connection, object_size=16, subscribers=1, warmup_seconds=0, cooldown_seconds=0)
+
+    def test_window_uses_recorded_bounds_when_no_object_reaches_full_fanout(self) -> None:
+        self.object_start(1, "rx", 1)
+        self.object_start(2, "rx", 1, frame=1)
+        self.object_start(3, "tx", 2, frame=1)
+        self.object_start(4, "rx", 1, frame=2)
+        self.connection.execute("UPDATE raw.moq_object_start SET timestamp_ns = 140_000 WHERE trace_id = 2")
+        self.connection.execute("UPDATE raw.moq_object_start SET timestamp_ns = 180_000 WHERE trace_id = 4")
+        self.prepare_model()
+
+        with self.assertLogs("moq_trace.analysis.analyze", level="WARNING") as logs:
+            _select_window(
+                self.connection,
+                object_size=16,
+                subscribers=2,
+                warmup_seconds=1,
+                cooldown_seconds=1,
+                workload_bounds=(120_000, 160_000),
+            )
+
+        self.assertIn("using the recorded workload window", logs.output[0])
+        self.assertIn("fewer than 2 outbound copies", logs.output[1])
+        self.assertEqual(self.connection.execute("SELECT * FROM model.window").fetchone(), (100_000, 120_000, 160_000))
+        self.assertEqual(self.connection.execute("SELECT trace_id FROM selected_rx").fetchall(), [(2,)])
 
     def test_excess_fanout_is_still_rejected(self) -> None:
         self.object_start(1, "rx", 1)

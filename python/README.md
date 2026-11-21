@@ -284,6 +284,11 @@ Use `just bench` or `just run CONFIG` for workload capture. `moq-trace analyze`,
 `moq-trace verify`, and `moq-trace plot` are workspace commands for inspecting
 local development and testing artifacts.
 
+If no object reaches full fanout, analysis can use the runner's already-trimmed
+workload window from `monitoring.json`. Pass it with `moq-trace analyze --monitoring`
+when reprocessing a saved trace. Fanout is still measured against the requested
+subscriber count.
+
 After the steady-state window opens, incomplete fanout produces a warning rather
 than failing analysis. The artifact keeps every selected inbound object and the
 outcomes of its recorded copies; an absent copy is not labeled as dropped.
