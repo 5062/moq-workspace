@@ -200,16 +200,20 @@ class CaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(where.directory(where.subscriber).startswith(str(self.root / "peer")))
 
     async def test_a_remote_relay_is_traced_on_its_host_and_copied_back(self) -> None:
-        config = self._config(hosts=Hosts(relay=self._remote("relay")), qlog=True)
+        config = self._config(hosts=Hosts(relay=self._remote("relay")), qlog=True, relay_env={"RELAY_SETTING": "on"})
         with mock.patch.object(capture, "LttngSession", autospec=True) as session_class:
-            relay = ("sh", "-c", "trap 'exit 0' INT; echo \"$QLOGDIR\"; echo listening; while :; do sleep 0.02; done")
+            relay = (
+                "sh",
+                "-c",
+                'trap \'exit 0\' INT; echo "$QLOGDIR" "$RELAY_SETTING"; echo listening; while :; do sleep 0.02; done',
+            )
             where, result = await self._capture(config, command_set(relay=relay))
 
         relay_directory = where.directory(where.relay)
         session_class.assert_called_once_with(where.relay, f"{relay_directory}/trace")
         self.assertEqual(where.relay.scripts[1], f"mkdir -p {relay_directory} {relay_directory}/qlog")
         self.assertEqual(where.relay.fetched, [(relay_directory, ["trace", "qlog"])])
-        self.assertEqual((config.output / "relay.log").read_text().splitlines()[0], f"{relay_directory}/qlog")
+        self.assertEqual((config.output / "relay.log").read_text().splitlines()[0], f"{relay_directory}/qlog on")
         # Neither peer shares the relay's host, so only the relay is recorded.
         self.assertEqual(result.pids, (result.relay_pid,))
         manifest = read_manifest(result.network)

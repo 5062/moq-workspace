@@ -51,6 +51,8 @@
               pkgs.babeltrace2
               pkgs.clang
               pkgs.pkg-config
+              # The Quinn fork's `dpdk` feature compiles against it.
+              pkgs.dpdk
               pkgs.rustPlatform.bindgenHook
               python
               (pkgs.writeShellScriptBin "moq-trace" ''

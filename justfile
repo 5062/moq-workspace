@@ -67,9 +67,19 @@ install-trace:
 build-moq-dev-moq:
     just _cargo relays/moq-dev-moq build --release -p moq-relay --features moq-relay/trace
 
+# The traced relay with the Quinn fork's DPDK socket, in its own target directory
+# so it never replaces the kernel-socket build. The socket only takes over when
+# `QUINN_DPDK_EAL` is set at launch; see deps/quinn/quinn/src/runtime/dpdk.rs.
+build-moq-dev-moq-dpdk:
+    QUINN_BUILD_DPDK=1 just _cargo relays/moq-dev-moq build --release -p moq-relay --features moq-relay/trace --target-dir target/dpdk
+
 # Build the traced Cloudflare moq-rs relay against the pinned toolkit and forks.
 build-cloudflare-moq-rs:
     just _cargo relays/cloudflare-moq-rs build --release -p moq-relay-ietf --features trace
+
+# The Cloudflare relay with the Quinn fork's DPDK socket; see build-moq-dev-moq-dpdk.
+build-cloudflare-moq-rs-dpdk:
+    QUINN_BUILD_DPDK=1 just _cargo relays/cloudflare-moq-rs build --release -p moq-relay-ietf --features trace --target-dir target/dpdk
 
 # Build the traced QUICHE relay against the toolkit installed from the pin.
 build-google-quiche: install-trace

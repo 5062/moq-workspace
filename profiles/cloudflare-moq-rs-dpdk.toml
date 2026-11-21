@@ -1,0 +1,41 @@
+# https://github.com/5062/moq-rs
+# Build: `just build-cloudflare-moq-rs-dpdk` in the workspace.
+#
+# The certificate placeholders make the runner generate a throwaway TLS pair.
+# The relay logs "listening on <addr>", which the default ready marker matches.
+# It installs no SIGINT handler, so a graceful stop would read as a crash.
+#
+# This variant swaps the kernel UDP socket for the Quinn fork's DPDK socket
+# (deps/quinn/quinn/src/runtime/dpdk.rs), so a bench against the plain profile
+# measures what the kernel's UDP path costs. Set `relay_env` for the relay host:
+#
+# - `QUINN_DPDK_EAL`: DPDK's arguments. `-l` names the CPU the busy-polling
+#   thread takes; keep it off `relay_cpu`. `-a` names the bench NIC port, which
+#   should carry nothing else, since the socket does not isolate its traffic from
+#   the kernel's. The nixpkgs DPDK loads its drivers (mlx5 included) by itself.
+# - `QUINN_DPDK_ADDR`: the IPv4 address peers dial on that port. The socket
+#   answers ARP for it and serves IPv4 only, and `relay_url` dials it.
+#
+# The relay host needs hugepages, and the relay the privileges its NIC driver
+# asks for. DPDK frames never cross loopback, so every peer runs on another host.
+# The kernel never sees the relay's traffic, so a packet capture on the relay host
+# records none of it, and the kernel socket's drop counters stay at zero.
+checkout = "relays/cloudflare-moq-rs"
+# The relay host initializes these besides the suite's submodules.
+submodules = ["relays/cloudflare-moq-rs"]
+relay_bin = "target/dpdk/release/moq-relay-ietf"
+# Run in the relay's checkout on a remote relay host before each run. It builds
+# through the workspace recipe, against the pinned toolkit and forks, and sets
+# NIX_CONFIG so a host whose Nix leaves flakes off still builds.
+relay_build = "cd \"$(git rev-parse --show-superproject-working-tree)\" && NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-cloudflare-moq-rs-dpdk"
+relay_args = [
+  "--bind", "[::]:{port}",
+  "--tls-cert", "{certificate}",
+  "--tls-key", "{key}",
+]
+# The relay reads its qlog directory from a flag rather than `QLOGDIR`.
+relay_qlog_args = ["--qlog-dir", "{qlog}"]
+relay_graceful_stop = false
+transport_profile = "quinn"
+relay_env = { QUINN_DPDK_EAL = "-l 3 -a 0000:00:00.0 --in-memory", QUINN_DPDK_ADDR = "192.0.2.1" }
+relay_url = "https://192.0.2.1:{port}"

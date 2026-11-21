@@ -1,0 +1,40 @@
+# https://github.com/5062/moq/tree/moq-trace
+# Build: `just build-moq-dev-moq-dpdk` in the workspace.
+#
+# The relay generates its own certificate, and anyone may publish or subscribe.
+# Like upstream, it installs no SIGINT handler, so a graceful stop would read as
+# a crash. A killed relay can leave its qlog's last record half written, which
+# the analysis ignores.
+#
+# This variant swaps the kernel UDP socket for the Quinn fork's DPDK socket
+# (deps/quinn/quinn/src/runtime/dpdk.rs), so a bench against the plain profile
+# measures what the kernel's UDP path costs. Set `relay_env` for the relay host:
+#
+# - `QUINN_DPDK_EAL`: DPDK's arguments. `-l` names the CPU the busy-polling
+#   thread takes; keep it off `relay_cpu`. `-a` names the bench NIC port, which
+#   should carry nothing else, since the socket does not isolate its traffic from
+#   the kernel's. The nixpkgs DPDK loads its drivers (mlx5 included) by itself.
+# - `QUINN_DPDK_ADDR`: the IPv4 address peers dial on that port. The socket
+#   answers ARP for it and serves IPv4 only, and `relay_url` dials it.
+#
+# The relay host needs hugepages, and the relay the privileges its NIC driver
+# asks for. DPDK frames never cross loopback, so every peer runs on another host.
+# The kernel never sees the relay's traffic, so a packet capture on the relay host
+# records none of it, and the kernel socket's drop counters stay at zero.
+checkout = "relays/moq-dev-moq"
+relay_bin = "target/dpdk/release/moq-relay"
+relay_args = [
+  "--server-bind", "[::]:{port}",
+  "--server-backend", "quinn",
+  "--server-version", "{protocol}",
+  "--tls-generate", "localhost",
+  "--auth-public", "",
+]
+# Run in the relay's checkout on a remote relay host before each run. It builds
+# through the workspace recipe, against the pinned toolkit and forks, and sets
+# NIX_CONFIG so a host whose Nix leaves flakes off still builds.
+relay_build = "cd \"$(git rev-parse --show-superproject-working-tree)\" && NIX_CONFIG='extra-experimental-features = nix-command flakes' nix develop --command just build-moq-dev-moq-dpdk"
+relay_graceful_stop = false
+transport_profile = "quinn"
+relay_env = { QUINN_DPDK_EAL = "-l 3 -a 0000:00:00.0 --in-memory", QUINN_DPDK_ADDR = "192.0.2.1" }
+relay_url = "https://192.0.2.1:{port}"

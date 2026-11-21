@@ -94,6 +94,9 @@ class ExperimentConfig(StrictModel):
     # The MoQ version the peers offer and `{protocol}` names to the relay. A bench
     # takes it from its suite, so every implementation negotiates the same one.
     protocol: str
+    # Set in the relay's environment, for a relay or transport configured that way,
+    # such as the Quinn fork's DPDK socket.
+    relay_env: dict[str, str] = Field(default_factory=dict)
     relay_ready_log: str = "listening"
     relay_startup_seconds: float = Field(default=0.5, ge=0)
     relay_graceful_stop: bool = True

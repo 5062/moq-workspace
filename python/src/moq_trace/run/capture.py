@@ -171,7 +171,7 @@ class CaptureSession:
 
         host = self.placement.host(role)
         directory = self.placement.directory(host)
-        env = {}
+        env = dict(self.config.relay_env) if role == "relay" else {}
         if role == "subscriber" and self.config.monitor_goodput:
             env["MOQ_BENCH_DELIVERY"] = "1"
         if role == "relay" and self.config.qlog:

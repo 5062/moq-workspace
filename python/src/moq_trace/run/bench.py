@@ -35,6 +35,7 @@ LAUNCH_KEYS = frozenset(
         "relay_bin",
         "relay_args",
         "relay_build",
+        "relay_env",
         "relay_local_host",
         "relay_ready_log",
         "relay_startup_seconds",
