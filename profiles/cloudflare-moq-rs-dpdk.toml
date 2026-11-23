@@ -37,5 +37,5 @@ relay_args = [
 relay_qlog_args = ["--qlog-dir", "{qlog}"]
 relay_graceful_stop = false
 transport_profile = "quinn"
-relay_env = { QUINN_DPDK_EAL = "-l 3 -a 0000:00:00.0 --in-memory", QUINN_DPDK_ADDR = "192.0.2.1" }
-relay_url = "https://192.0.2.1:{port}"
+relay_env = { QUINN_DPDK_EAL = "-l 2 -a 0000:02:00.0 --in-memory", QUINN_DPDK_ADDR = "10.200.0.50" }
+relay_url = "https://10.200.0.50:{port}"
