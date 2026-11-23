@@ -6,6 +6,7 @@
 # a crash. A killed relay can leave its qlog's last record half written, which
 # the analysis ignores.
 checkout = "relays/moq-dev-moq"
+relay_env = { LTTNG_HOME = "/tmp/moq-lttng.c2Yx8D" }
 relay_bin = "target/release/moq-relay"
 relay_args = [
   "--server-bind", "[::]:{port}",
