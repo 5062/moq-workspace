@@ -18,12 +18,21 @@
 #   answers ARP for it and serves IPv4 only, and `relay_url` dials it.
 #
 # The relay host needs hugepages, and the relay the privileges its NIC driver
-# asks for. DPDK frames never cross loopback, so every peer runs on another host.
+# asks for. A build replaces the relay binary and any file capabilities with it,
+# so the relay starts through a private copy of setpriv that holds them, which
+# hands them on as ambient capabilities (see the relay host setup below).
+# DPDK frames never cross loopback, so every peer runs on another host.
 # The kernel never sees the relay's traffic, so a packet capture on the relay host
 # records none of it, and the kernel socket's drop counters stay at zero.
 checkout = "relays/moq-dev-moq"
-relay_bin = "target/dpdk/release/moq-relay"
+# Relay host setup, once, on winterfell01 (its checkout is /localtmp/moq-workspace):
+#   mkdir -m 700 /localtmp/moq-caps && cp /usr/bin/setpriv /localtmp/moq-caps/
+#   sudo setcap cap_net_raw,cap_net_admin,cap_ipc_lock,cap_sys_rawio+p /localtmp/moq-caps/setpriv
+relay_bin = "/localtmp/moq-caps/setpriv"
 relay_args = [
+  "--inh-caps", "+net_raw,+net_admin,+ipc_lock,+sys_rawio",
+  "--ambient-caps", "+net_raw,+net_admin,+ipc_lock,+sys_rawio",
+  "--", "/localtmp/moq-workspace/relays/moq-dev-moq/target/dpdk/release/moq-relay",
   "--server-bind", "[::]:{port}",
   "--server-backend", "quinn",
   "--server-version", "{protocol}",
