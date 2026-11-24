@@ -73,7 +73,8 @@ accepts every client flag, because both flatten those configs. `--duration`,
 server logs `listening` once its listener is bound so a runner can wait for it.
 
 With `MOQ_BENCH_DELIVERY=1`, the client additionally writes version-1
-`MOQ_BENCH_DELIVERY {JSON}` records to stdout at startup, once per second, and
+`MOQ_BENCH_DELIVERY {JSON}` records to stderr, beside its logs and in one write
+with them so neither can cut the other, at startup, once per second, and
 at orderly shutdown. Each record carries Linux `CLOCK_MONOTONIC` nanoseconds,
 PID, a zero-based connection index, and cumulative received payload `bytes` and
 completed `objects`. The workspace uses these for endpoint goodput independently

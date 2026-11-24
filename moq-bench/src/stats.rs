@@ -211,15 +211,26 @@ impl Stats {
     /// Write cumulative received payload counters and the cumulative latency
     /// histogram, as `[lower_ns, count]` pairs of its non-empty buckets, on the
     /// Linux host clock.
+    ///
+    /// The records go to stderr in one write under its lock, beside the logs.
+    /// Over ssh, stdout and stderr travel as separate streams that a runner
+    /// merges wherever their chunks happen to split, so a record on stdout could
+    /// be cut by a log line.
     pub fn report_delivery(&self) {
+        use std::fmt::Write as _;
+        use std::io::Write as _;
+
         let ns = monotonic_ns();
         let pid = std::process::id();
+        let mut report = String::new();
         for (connection, received) in self.received.iter().enumerate() {
             let bytes = received.bytes.load(Ordering::Relaxed);
             let objects = received.objects.load(Ordering::Relaxed);
-            println!(
+            writeln!(
+                report,
                 "MOQ_BENCH_DELIVERY {{\"schema_version\":1,\"monotonic_ns\":{ns},\"pid\":{pid},\"connection\":{connection},\"bytes\":{bytes},\"objects\":{objects}}}"
-            );
+            )
+            .expect("writing to a String cannot fail");
         }
         let buckets: Vec<String> = self
             .latency
@@ -230,10 +241,17 @@ impl Stats {
                 (count > 0).then(|| format!("[{},{count}]", lower_ns(index)))
             })
             .collect();
-        println!(
+        writeln!(
+            report,
             "MOQ_BENCH_LATENCY {{\"schema_version\":1,\"monotonic_ns\":{ns},\"pid\":{pid},\"buckets\":[{}]}}",
             buckets.join(",")
-        );
+        )
+        .expect("writing to a String cannot fail");
+        // The logger writes each event to stderr under the same lock.
+        std::io::stderr()
+            .lock()
+            .write_all(report.as_bytes())
+            .expect("failed to write delivery records to stderr");
     }
 
     fn counters(&self) -> Counters {
