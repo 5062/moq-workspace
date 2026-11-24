@@ -7,6 +7,7 @@ import shutil
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
+from .. import labels
 from ..metadata import TransportProfile
 
 
@@ -119,8 +120,11 @@ class ExperimentConfig(StrictModel):
     # the relay host's address.
     relay_url: str | None = None
     # Peers placed on the relay's host then run on every other CPU it allows, so they
-    # never preempt the relay on its own CPU.
-    relay_cpu: int | None = Field(default=None, ge=0, description="Pin each relay to this CPU.")
+    # never preempt the relay on its own CPUs. A CPU outside this set that the relay
+    # pins one of its own threads to, such as a DPDK polling core, stays its own.
+    relay_cpu: tuple[int, ...] | None = Field(
+        default=None, min_length=1, description="Pin each relay to these CPUs, such as 3 or 3-10."
+    )
     subscribers: int = Field(default=1, gt=0, description="Subscriber sessions, one subscription each.")
     object_size: int = Field(default=16_384, gt=0, description="Bytes per object.")
     fps: int = Field(default=30, gt=0, description="Objects published per second.")
@@ -154,6 +158,17 @@ class ExperimentConfig(StrictModel):
     monitor_goodput: bool = True
     monitor_interval_seconds: float = Field(default=1.0, gt=0, description="Resource sample interval in seconds.")
     render: bool = True
+
+    @field_validator("relay_cpu", mode="before")
+    @classmethod
+    def parse_relay_cpu(cls, value: object) -> object:
+        """Accept one CPU or a `taskset -c` style list, as written on the command line or in TOML."""
+
+        if isinstance(value, int) and not isinstance(value, bool):
+            return labels.parse_cpus(str(value))
+        if isinstance(value, str):
+            return labels.parse_cpus(value)
+        return value
 
     @field_validator("relay_bin", "bench_bin")
     @classmethod

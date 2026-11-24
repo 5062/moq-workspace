@@ -42,7 +42,8 @@ def _describe(metadata: RunMetadata, varied: str | None = None) -> str:
     """
 
     workload = metadata.workload
-    values = ["unpinned" if metadata.relay_cpu is None else f"pinned CPU {metadata.relay_cpu}"]
+    pinned = metadata.relay_cpu
+    values = ["unpinned" if pinned is None else f"pinned CPU{'s' if len(pinned) > 1 else ''} {labels.cpus(pinned)}"]
     if varied != "subscribers":
         values.append(labels.subscribers(workload.subscribers))
     if varied != "object_size":

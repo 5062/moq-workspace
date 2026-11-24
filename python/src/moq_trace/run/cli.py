@@ -86,6 +86,8 @@ def _add_setting(parser: argparse.ArgumentParser, name: str) -> None:
     # Defaults that validators rewrite, such as the resolved peer path, are shown
     # as written in the configuration model.
     default = "unpinned" if field.default is None else field.default
+    # A list setting is read as text, which the configuration model parses.
+    kind = str if typing.get_origin(kind) is tuple else kind
     parser.add_argument(f"--{name.replace('_', '-')}", type=kind, help=f"{field.description} (default: {default})")
 
 

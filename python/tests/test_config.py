@@ -192,6 +192,22 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(command.publisher[:3], ("taskset", "-c", "0-1,3-5,7"))
         self.assertEqual(command.subscriber[0], "/usr/bin/moq-bench")
 
+    def test_relay_cpu_reads_one_cpu_or_a_list(self) -> None:
+        def pinned(value: object) -> tuple[int, ...] | None:
+            config = ExperimentConfig(protocol=PROTOCOL, output=pathlib.Path("run"), relay_args=(), relay_cpu=value)
+            return config.relay_cpu
+
+        self.assertEqual(pinned(3), (3,))
+        self.assertEqual(pinned("3-6"), (3, 4, 5, 6))
+        self.assertEqual(pinned("7, 2,4-5,4"), (2, 4, 5, 7))
+        self.assertEqual(pinned([5, 3]), (5, 3))
+        for bad in ("5-3", "-1", "", "a"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                pinned(bad)
+        config = ExperimentConfig(protocol=PROTOCOL, output=pathlib.Path("run"), relay_args=(), relay_cpu="3-10")
+        command = commands(config, placement_for(config))
+        self.assertEqual(command.relay[:3], ("taskset", "-c", "3-10"))
+
     def test_peer_cpus_exclude_a_pinned_relay_cpu_on_its_host(self) -> None:
         def peer_cpus(allowed: set[int], **overrides: object) -> tuple[int, ...] | None:
             config = ExperimentConfig(protocol=PROTOCOL, output=pathlib.Path("run"), relay_args=(), **overrides)
@@ -200,12 +216,13 @@ class ConfigurationTests(unittest.TestCase):
                 return asyncio.run(placement.peer_cpus())
 
         self.assertEqual(peer_cpus({0, 1, 2, 3}, relay_cpu=1), (0, 2, 3))
+        self.assertEqual(peer_cpus({0, 1, 2, 3, 4}, relay_cpu="1-2,4"), (0, 3))
         self.assertIsNone(peer_cpus({0, 1, 2, 3}))
         remote = HostConfig(ssh="me@peer.example", binary="/usr/bin/moq-bench")
         separate = Hosts(publisher=remote, subscriber=remote)
         self.assertIsNone(peer_cpus({0, 1}, relay_cpu=1, hosts=separate, relay_url="https://relay:4443"))
-        with self.assertRaisesRegex(CaptureError, "relay_cpu 4 is not a CPU"):
-            peer_cpus({0, 1}, relay_cpu=4)
+        with self.assertRaisesRegex(CaptureError, "relay_cpu 1-2 includes CPUs .* does not allow"):
+            peer_cpus({0, 1}, relay_cpu="1-2")
         with self.assertRaisesRegex(CaptureError, "no CPU besides relay_cpu 0"):
             peer_cpus({0}, relay_cpu=0)
 

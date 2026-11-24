@@ -207,8 +207,8 @@ def default_output(relays: Sequence[str], settings: Mapping[str, Any], sweep: Sw
     """A fresh directory named for its time, its relays, and the settings given explicitly.
 
     Such as `artifacts/20261124T110306Z-moq-dev-moq-dpdk-subscribers-500`. Switches
-    appear as their flag or its `no-` form; settings that are not numbers or
-    switches, such as paths and hosts, are left out of the name.
+    appear as their flag or its `no-` form; settings that are not numbers, switches,
+    or the relay's CPUs, such as paths and hosts, are left out of the name.
     """
 
     parts = [datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ"), *relays]
@@ -216,7 +216,8 @@ def default_output(relays: Sequence[str], settings: Mapping[str, Any], sweep: Sw
         flag = name.replace("_", "-")
         if isinstance(value, bool):
             parts.append(flag if value else f"no-{flag}")
-        elif isinstance(value, int | float):
+        # The relay's CPUs arrive as the text written, such as `3-10`.
+        elif isinstance(value, int | float) or name == "relay_cpu":
             parts.append(f"{flag}-{value}")
     if sweep is not None:
         parts.append(f"{sweep.dimension.replace('_', '-')}-{'-'.join(map(str, sweep.values))}")

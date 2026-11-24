@@ -188,13 +188,16 @@ class BenchTests(unittest.TestCase):
     def test_the_default_output_names_the_relays_and_explicit_settings(self) -> None:
         settings = {
             "subscribers": 500,
+            "relay_cpu": "3-10",
             "warmup_seconds": 1.5,
             "bench_bin": pathlib.Path("x"),
             "qlog": True,
             "trace": False,
         }
         name = bench.default_output(["a", "b"], settings, bench.Sweep("object_size", (1, 2))).name
-        self.assertRegex(name, r"^\d{8}T\d{6}Z-a-b-subscribers-500-warmup-seconds-1\.5-qlog-no-trace-object-size-1-2$")
+        self.assertRegex(
+            name, r"^\d{8}T\d{6}Z-a-b-subscribers-500-relay-cpu-3-10-warmup-seconds-1\.5-qlog-no-trace-object-size-1-2$"
+        )
 
     def test_a_sweep_names_one_dimension_and_distinct_positive_values(self) -> None:
         self.assertEqual(bench.parse_sweep("subscribers=1,4,2"), bench.Sweep("subscribers", (1, 4, 2)))

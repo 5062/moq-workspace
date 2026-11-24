@@ -359,7 +359,8 @@ class ComparisonPlotTests(unittest.TestCase):
 class SubtitleTests(unittest.TestCase):
     def test_the_subtitle_names_the_relay_cpu_only_when_pinned(self) -> None:
         self.assertEqual(_describe(run_metadata()), "unpinned | 1 subscriber | 1024 bytes")
-        self.assertEqual(_describe(run_metadata(relay_cpu=3)), "pinned CPU 3 | 1 subscriber | 1024 bytes")
+        self.assertEqual(_describe(run_metadata(relay_cpu=(3,))), "pinned CPU 3 | 1 subscriber | 1024 bytes")
+        self.assertEqual(_describe(run_metadata(relay_cpu=(3, 4, 5))), "pinned CPUs 3-5 | 1 subscriber | 1024 bytes")
 
     def test_the_note_names_copies_that_were_never_fully_sent(self) -> None:
         metadata = run_metadata()

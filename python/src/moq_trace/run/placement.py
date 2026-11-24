@@ -9,6 +9,7 @@ import shlex
 import time
 import uuid
 
+from .. import labels
 from ..capture.hosts import Host
 from ..capture.local import LocalHost
 from ..errors import CaptureError
@@ -122,15 +123,18 @@ class Placement:
         unpinned relay, are left alone.
         """
 
-        cpu = self.config.relay_cpu
-        if cpu is None or all(self.host(role) is not self.relay for role in ("publisher", "subscriber")):
+        pinned = self.config.relay_cpu
+        if pinned is None or all(self.host(role) is not self.relay for role in ("publisher", "subscriber")):
             return None
         allowed = await self.relay.cpus()
-        if cpu not in allowed:
-            raise CaptureError(f"relay_cpu {cpu} is not a CPU {self.relay.name} allows: {sorted(allowed)}")
-        others = tuple(sorted(allowed - {cpu}))
+        if not set(pinned) <= allowed:
+            raise CaptureError(
+                f"relay_cpu {labels.cpus(pinned)} includes CPUs {self.relay.name} does not allow: {sorted(allowed)}"
+            )
+        others = tuple(sorted(allowed - set(pinned)))
         if not others:
-            raise CaptureError(f"{self.relay.name} has no CPU besides relay_cpu {cpu} for the peers on it")
+            pins = labels.cpus(pinned)
+            raise CaptureError(f"{self.relay.name} has no CPU besides relay_cpu {pins} for the peers on it")
         return others
 
     async def connect(self) -> None:

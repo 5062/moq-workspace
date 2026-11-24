@@ -142,8 +142,8 @@ class RunMetadata(ArtifactModel):
     counts: Counts
     processes: Processes
     protocol: str | None = None
-    # The one CPU the relay was pinned to, or unset when it ran unpinned.
-    relay_cpu: int | None = Field(default=None, ge=0)
+    # The CPUs the relay was pinned to, or unset when it ran unpinned.
+    relay_cpu: tuple[int, ...] | None = Field(default=None, min_length=1)
     binaries: Binaries | None = None
     commands: CommandSet | None = None
     # Unset when no network capture was supplied beside the trace.

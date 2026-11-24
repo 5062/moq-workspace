@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from .. import labels
 from ..capture.hosts import Host
 from ..errors import CaptureError
 from ..metadata import CommandSet
@@ -23,21 +24,9 @@ def _relay_url(config: ExperimentConfig, placement: Placement, peer: Host) -> st
     return f"https://{config.hosts.relay.reachable_address}:{config.port}"
 
 
-def _cpu_list(cpus: Sequence[int]) -> str:
-    """Write sorted CPUs as a `taskset -c` list, folding consecutive runs into ranges."""
-
-    runs: list[list[int]] = []
-    for cpu in cpus:
-        if runs and cpu == runs[-1][-1] + 1:
-            runs[-1].append(cpu)
-        else:
-            runs.append([cpu])
-    return ",".join(str(run[0]) if len(run) == 1 else f"{run[0]}-{run[-1]}" for run in runs)
-
-
 def _peer(config: ExperimentConfig, placement: Placement, role: str, cpus: Sequence[int] | None) -> list[str]:
     # Only a peer sharing the relay's host can contend for the relay's CPU.
-    pin = ["taskset", "-c", _cpu_list(cpus)] if cpus and placement.host(role) is placement.relay else []
+    pin = ["taskset", "-c", labels.cpus(cpus)] if cpus and placement.host(role) is placement.relay else []
     return [
         *pin,
         placement.bench_binary(role),
@@ -80,7 +69,7 @@ def _relay(config: ExperimentConfig, placement: Placement) -> list[str]:
     except KeyError as error:
         raise CaptureError(f"unknown relay argument placeholder: {error.args[0]}") from error
     if config.relay_cpu is not None:
-        relay[:0] = ["taskset", "-c", str(config.relay_cpu)]
+        relay[:0] = ["taskset", "-c", labels.cpus(config.relay_cpu)]
     return relay
 
 
