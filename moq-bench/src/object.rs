@@ -13,9 +13,31 @@ const MAGIC: [u8; 8] = *b"moqbench";
 /// Bytes of keyframe header: the magic, then `frame_size`, `group_size`, and `fps`
 /// as little-endian `u64`s.
 ///
-/// `--frame-size` must be at least this long, so every frame of a group can be
-/// exactly one size.
 pub const HEADER_LEN: usize = MAGIC.len() + 3 * size_of::<u64>();
+
+/// Bytes of send-time stamp at the end of every frame.
+const STAMP_LEN: usize = size_of::<u64>();
+
+/// The shortest `--frame-size`: a keyframe's header and its stamp, so every frame
+/// of a group can be exactly one size.
+pub const MIN_FRAME_LEN: usize = HEADER_LEN + STAMP_LEN;
+
+/// Copy `frame` with its last eight bytes set to `sent_ns`, the publisher's
+/// `CLOCK_MONOTONIC`, so a subscriber on the same host can time the delivery.
+#[must_use]
+pub fn stamp(frame: &[u8], sent_ns: u64) -> Bytes {
+    let mut bytes = BytesMut::from(frame);
+    let len = bytes.len();
+    bytes[len - STAMP_LEN..].copy_from_slice(&sent_ns.to_le_bytes());
+    bytes.freeze()
+}
+
+/// The publisher's send time from a frame's last eight bytes.
+#[must_use]
+pub fn sent_ns(payload: &[u8]) -> Option<u64> {
+    let start = payload.len().checked_sub(STAMP_LEN)?;
+    Some(u64::from_le_bytes(payload[start..].try_into().ok()?))
+}
 
 /// Encode the keyframe that opens every group of a track, zero-padded to `frame_size`.
 ///
@@ -25,14 +47,14 @@ pub const HEADER_LEN: usize = MAGIC.len() + 3 * size_of::<u64>();
 ///
 /// # Panics
 ///
-/// If `shape.frame_size` is shorter than [`HEADER_LEN`], which argument parsing
+/// If `shape.frame_size` is shorter than [`MIN_FRAME_LEN`], which argument parsing
 /// rejects.
 #[must_use]
 pub fn encode(shape: &Shape) -> Bytes {
     let size = usize::try_from(shape.frame_size).expect("frame size fits in memory");
     assert!(
-        size >= HEADER_LEN,
-        "frame size {size} is shorter than the keyframe header"
+        size >= MIN_FRAME_LEN,
+        "frame size {size} is shorter than the keyframe header and stamp"
     );
 
     let mut bytes = BytesMut::with_capacity(size);
@@ -95,15 +117,24 @@ mod tests {
     }
 
     #[test]
-    fn fits_exactly_at_header_length() {
+    fn fits_exactly_at_minimum_length() {
         let shape = Shape {
-            frame_size: HEADER_LEN as u64,
+            frame_size: MIN_FRAME_LEN as u64,
             ..shape()
         };
-        assert_eq!(
-            decode(&encode(&shape)).unwrap().frame_size,
-            HEADER_LEN as u64
-        );
+        let frame = stamp(&encode(&shape), 7);
+        assert_eq!(decode(&frame).unwrap().frame_size, MIN_FRAME_LEN as u64);
+        assert_eq!(sent_ns(&frame), Some(7));
+    }
+
+    /// The stamp keeps the frame's length and leaves the keyframe header readable.
+    #[test]
+    fn stamp_round_trips() {
+        let frame = stamp(&encode(&shape()), u64::MAX - 1);
+        assert_eq!(frame.len(), 512);
+        assert_eq!(decode(&frame).unwrap().group_size, 4);
+        assert_eq!(sent_ns(&frame), Some(u64::MAX - 1));
+        assert_eq!(sent_ns(&[0; 7]), None);
     }
 
     /// A zeroed frame, the one a group that lost its keyframe starts with, is not

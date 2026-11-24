@@ -19,6 +19,12 @@ CREATE TABLE monitoring.deliveries (
     host VARCHAR, pid INTEGER, connection UBIGINT,
     monotonic_ns BIGINT, elapsed_ns BIGINT, bytes UBIGINT, objects UBIGINT
 );
+-- Cumulative publish-to-receive counts per histogram bucket, one row per non-empty
+-- bucket per sample. Only kept when the publisher shares the subscriber's clock.
+CREATE TABLE monitoring.latencies (
+    host VARCHAR, pid INTEGER, monotonic_ns BIGINT, elapsed_ns BIGINT,
+    lower_ns UBIGINT, count UBIGINT
+);
 
 CREATE VIEW monitoring.resource_intervals AS
 SELECT *, (end_ns - start_ns) / 1e9 AS seconds,
@@ -106,3 +112,30 @@ SELECT host, pid, connection, sum(seconds) AS covered_seconds,
        sum(objects) / sum(seconds) AS objects_per_second
 FROM monitoring.delivery_intervals AS d, monitoring.window AS w
 WHERE d.start_ns >= w.start_ns AND d.end_ns <= w.end_ns GROUP BY host, pid, connection;
+
+-- The frames received between the first and last histogram samples inside the
+-- window. Percentiles are bucket lower bounds, at most 1.6% under the true value.
+CREATE VIEW monitoring.latency_summary AS
+WITH bounds AS (
+    SELECT host, pid, min(elapsed_ns) AS first_ns, max(elapsed_ns) AS last_ns
+    FROM monitoring.latencies, monitoring.window
+    WHERE elapsed_ns BETWEEN start_ns AND end_ns GROUP BY host, pid
+), counts AS (
+    SELECT host, pid, lower_ns, first_ns, last_ns,
+           sum(count) FILTER (WHERE elapsed_ns = last_ns)
+           - coalesce(sum(count) FILTER (WHERE elapsed_ns = first_ns), 0) AS frames
+    FROM monitoring.latencies JOIN bounds USING (host, pid)
+    WHERE elapsed_ns IN (first_ns, last_ns) GROUP BY host, pid, lower_ns, first_ns, last_ns
+), cumulative AS (
+    SELECT *, sum(frames) OVER (PARTITION BY host, pid ORDER BY lower_ns) AS below,
+           sum(frames) OVER (PARTITION BY host, pid) AS total
+    FROM counts WHERE frames > 0
+)
+SELECT host, pid, (any_value(last_ns) - any_value(first_ns)) / 1e9 AS covered_seconds,
+       any_value(total)::UBIGINT AS frames,
+       min(lower_ns) FILTER (WHERE below >= 0.5 * total) AS p50_ns,
+       min(lower_ns) FILTER (WHERE below >= 0.9 * total) AS p90_ns,
+       min(lower_ns) FILTER (WHERE below >= 0.99 * total) AS p99_ns,
+       min(lower_ns) FILTER (WHERE below >= 0.999 * total) AS p999_ns,
+       max(lower_ns) AS max_ns
+FROM cumulative GROUP BY host, pid;

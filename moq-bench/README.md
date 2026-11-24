@@ -98,12 +98,18 @@ for `subscriptions=<N>` before it measures, which are the same observables
 ## Shape
 
 Every frame in a group is exactly `--frame-size` bytes, the keyframe included, so
-`--frame-size` must be at least the 32-byte keyframe header. The keyframe is a
-binary header of the magic `moqbench` followed by `frame_size`, `group_size`, and
-`fps` as little-endian `u64`s, zero-padded to the frame size. It carries only the
-shape, which is fixed for a track, so a publisher builds it once and every group
-shares it. Group sequence and path are already on the wire, and timing is in the
-trace.
+`--frame-size` must be at least 40 bytes: the 32-byte keyframe header and an
+8-byte stamp. The keyframe is a binary header of the magic `moqbench` followed by
+`frame_size`, `group_size`, and `fps` as little-endian `u64`s, zero-padded to the
+frame size. Group sequence and path are already on the wire.
+
+Every frame ends with its send time, the publisher's `CLOCK_MONOTONIC` in
+nanoseconds as a little-endian `u64`. A subscriber subtracts it from its own clock
+on arrival and keeps a cumulative histogram with buckets at most 1.6% wide. With
+`MOQ_BENCH_DELIVERY` set it prints the histogram's non-empty buckets each second as
+`MOQ_BENCH_LATENCY {"schema_version":1,"monotonic_ns":…,"pid":…,"buckets":[[lower_ns,count],…]}`.
+The two clocks agree only on one host, so the analysis keeps these figures only when
+the publisher and subscriber share one.
 
 A subscriber reads the header back and checks every frame of the group against it,
 without either peer knowing how the other was configured:

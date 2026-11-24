@@ -32,6 +32,7 @@ _SNAPSHOT_TABLES = {
     "monitoring.resource_summary": "SELECT * FROM run.monitoring.resource_summary",
     "monitoring.thread_summary": "SELECT * FROM run.monitoring.thread_summary",
     "monitoring.delivery_summary": "SELECT * FROM run.monitoring.delivery_summary",
+    "monitoring.latency_summary": "SELECT * FROM run.monitoring.latency_summary",
 }
 
 

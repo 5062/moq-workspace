@@ -8,12 +8,12 @@ use moq_net::{Timestamp, track};
 
 use crate::Shape;
 use crate::object;
-use crate::stats::Stats;
+use crate::stats::{Stats, monotonic_ns};
 
 /// Produce frames on one track until the process exits.
 ///
 /// Each group opens with the keyframe describing the shape, then carries
-/// `group_size` zeroed frames. The loop never returns: a track that stopped
+/// `group_size` zeroed frames. Every frame ends with its send time. The loop never returns: a track that stopped
 /// producing should still stay published, and the caller holds it open instead.
 pub async fn produce(
     shape: Shape,
@@ -26,8 +26,8 @@ pub async fn produce(
         return std::future::pending::<anyhow::Result<()>>().await;
     }
 
-    // Both frames are fixed for the track, so every group clones them by reference
-    // and the loop does no encoding or allocation of its own.
+    // Both frames are fixed for the track apart from the stamp, which each send
+    // copies in.
     let keyframe = object::encode(&shape);
     let zeros = Bytes::from(vec![0u8; shape.frame_size as usize]);
     let period = Duration::from_secs_f64(1.0 / shape.fps as f64);
@@ -43,12 +43,12 @@ pub async fn produce(
         ticker.tick().await;
         let mut group = track.append_group()?;
         stats.frame_sent(keyframe.len());
-        group.write_frame(Timestamp::now(), keyframe.clone())?;
+        group.write_frame(Timestamp::now(), object::stamp(&keyframe, monotonic_ns()))?;
 
         for _ in 0..shape.group_size {
             ticker.tick().await;
             stats.frame_sent(zeros.len());
-            group.write_frame(Timestamp::now(), zeros.clone())?;
+            group.write_frame(Timestamp::now(), object::stamp(&zeros, monotonic_ns()))?;
         }
 
         group.finish()?;

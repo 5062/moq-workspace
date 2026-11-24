@@ -58,12 +58,12 @@ pub struct Shape {
     /// Frames emitted per second per track. Zero publishes the track but stays idle.
     #[arg(long, env = "MOQ_BENCH_FPS", default_value_t = Shape::default().fps)]
     pub fps: u64,
-    /// Bytes per frame. At least the keyframe header, so the keyframe fits in one frame.
+    /// Bytes per frame. At least the keyframe header and the send-time stamp.
     #[arg(
         long,
         env = "MOQ_BENCH_FRAME_SIZE",
         default_value_t = Shape::default().frame_size,
-        value_parser = clap::value_parser!(u64).range(object::HEADER_LEN as u64..)
+        value_parser = clap::value_parser!(u64).range(object::MIN_FRAME_LEN as u64..)
     )]
     pub frame_size: u64,
     /// Zeroed frames per group following the keyframe. May be zero.

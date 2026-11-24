@@ -80,11 +80,23 @@ class MonitoringTests(unittest.TestCase):
             for second in (0, 1, 3, 5, 6)
             for connection in (0, 1)
         ]
+        # Cumulative histograms; the 3 ms bucket first appears inside the window.
+        self.latencies = [
+            dict(
+                schema_version=1,
+                monotonic_ns=(100 + second) * 1_000_000_000,
+                pid=10,
+                buckets=[[1_000_000, 10 * second], [2_000_000, second]] + ([[3_000_000, 1]] if second >= 5 else []),
+            )
+            for second in (1, 3, 5, 6)
+        ]
 
     def _ingest(self):
         (self.root / "resources.jsonl").write_text("".join(json.dumps(row) + "\n" for row in self.samples))
         (self.root / "subscriber.log").write_text(
-            "readiness log\n" + "".join("MOQ_BENCH_DELIVERY " + json.dumps(row) + "\n" for row in self.deliveries)
+            "readiness log\n"
+            + "".join("MOQ_BENCH_DELIVERY " + json.dumps(row) + "\n" for row in self.deliveries)
+            + "".join("MOQ_BENCH_LATENCY " + json.dumps(row) + "\n" for row in self.latencies)
         )
         monitoring.ingest(
             self.db,
@@ -123,6 +135,37 @@ class MonitoringTests(unittest.TestCase):
         monitoring.write_summary(self.path)
         summary = json.loads((self.root / "monitoring-summary.json").read_text())
         self.assertEqual(summary["total_goodput_bytes_per_second"], 3000.0)
+
+    def _share_publisher_host(self):
+        manifest = monitoring.read_manifest(self.path)
+        relay, peer = manifest.hosts
+        peer = peer.model_copy(update={"roles": {"publisher": 11, "subscriber": 10}})
+        self.path.write_text(manifest.model_copy(update={"hosts": (relay, peer)}).model_dump_json())
+
+    def _clear(self):
+        for table in ("window", "hosts", "resources", "threads", "deliveries", "latencies"):
+            self.db.execute(f"DELETE FROM monitoring.{table}")
+
+    def test_latency_is_kept_only_when_publisher_shares_the_clock(self):
+        self._ingest()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM monitoring.latencies").fetchone(), (0,))
+        self._clear()
+        self._share_publisher_host()
+        self._ingest()
+        row = self.db.execute(
+            "SELECT covered_seconds, frames, p50_ns, p90_ns, p99_ns, p999_ns, max_ns FROM monitoring.latency_summary"
+        ).fetchone()
+        self.assertEqual(row, (4.0, 45, 1_000_000, 2_000_000, 3_000_000, 3_000_000, 3_000_000))
+
+    def test_latency_reset_and_missing_histograms_are_rejected(self):
+        self._share_publisher_host()
+        self.latencies[2]["buckets"] = [[1_000_000, 1]]
+        with self.assertRaisesRegex(TraceError, "latency time/counters"):
+            self._ingest()
+        self._clear()
+        self.latencies = []
+        with self.assertRaisesRegex(TraceError, "missing latency"):
+            self._ingest()
 
     def test_counter_reset_and_pid_reuse_are_rejected(self):
         for field, value in (("user_ticks", 0), ("start_ticks", 999), ("monotonic_ns", 1_000_000_000)):

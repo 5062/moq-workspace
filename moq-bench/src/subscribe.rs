@@ -5,7 +5,7 @@ use std::sync::Arc;
 use moq_net::broadcast;
 
 use crate::object::{self, TRACK};
-use crate::stats::Stats;
+use crate::stats::{Stats, monotonic_ns};
 
 /// Subscribe to a broadcast's track and drain it until the broadcast closes.
 ///
@@ -36,6 +36,9 @@ pub async fn drain(
             }
             frames += 1;
             stats.frame_recv(connection, frame.payload.len());
+            if let Some(sent) = object::sent_ns(&frame.payload) {
+                stats.latency(monotonic_ns().saturating_sub(sent));
+            }
         }
 
         // A group that never showed a keyframe lost its opening frames, which a relay

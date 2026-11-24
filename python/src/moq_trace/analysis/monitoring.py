@@ -9,7 +9,7 @@ import duckdb
 import pyarrow as pa
 
 from ..errors import TraceError
-from ..manifest import DeliverySample, MonitoringHost, MonitoringManifest, ResourceSample
+from ..manifest import DeliverySample, LatencySample, MonitoringHost, MonitoringManifest, ResourceSample
 from . import sql
 from .artifact import open_artifact
 
@@ -50,6 +50,16 @@ _DELIVERY_COLUMNS = pa.schema(
         ("elapsed_ns", pa.int64()),
         ("bytes", pa.uint64()),
         ("objects", pa.uint64()),
+    ]
+)
+_LATENCY_COLUMNS = pa.schema(
+    [
+        ("host", pa.string()),
+        ("pid", pa.int32()),
+        ("monotonic_ns", pa.int64()),
+        ("elapsed_ns", pa.int64()),
+        ("lower_ns", pa.uint64()),
+        ("count", pa.uint64()),
     ]
 )
 
@@ -122,13 +132,28 @@ def _read_resources(
 
 
 def _read_deliveries(
-    path: pathlib.Path, host: MonitoringHost, origin_ns: int, subscribers: int, deliveries: sql.Rows
+    path: pathlib.Path,
+    host: MonitoringHost,
+    origin_ns: int,
+    subscribers: int,
+    deliveries: sql.Rows,
+    latencies: sql.Rows | None,
 ) -> None:
-    """Check the subscriber's delivered payload counters and queue their rows."""
+    """Check the subscriber's delivered payload counters and queue their rows.
+
+    `latencies` is None when the publisher runs on another host, whose clock the
+    send times were stamped on.
+    """
 
     previous = {}
+    latency = None
     with path.open() as stream:
         for line in stream:
+            if line.startswith("MOQ_BENCH_LATENCY "):
+                if latencies is not None:
+                    sample = line.removeprefix("MOQ_BENCH_LATENCY ")
+                    latency = _read_latency(sample, host, origin_ns, latency, latencies)
+                continue
             if not line.startswith("MOQ_BENCH_DELIVERY "):
                 continue
             row = DeliverySample.model_validate_json(line.removeprefix("MOQ_BENCH_DELIVERY "))
@@ -153,6 +178,29 @@ def _read_deliveries(
             )
     if set(previous) != set(range(subscribers)):
         raise ValueError("missing delivered payload counters; rebuild reference peers or disable monitor_goodput")
+    if latencies is not None and latency is None:
+        raise ValueError("missing latency histograms; rebuild reference peers")
+
+
+def _read_latency(
+    line: str, host: MonitoringHost, origin_ns: int, before: LatencySample | None, latencies: sql.Rows
+) -> LatencySample:
+    """Check one cumulative histogram against the previous one and queue its buckets."""
+
+    row = LatencySample.model_validate_json(line)
+    if row.pid != host.roles["subscriber"]:
+        raise ValueError("latency sample has an unexpected PID")
+    counts = dict(row.buckets)
+    if len(counts) != len(row.buckets):
+        raise ValueError("latency sample repeats a bucket")
+    if before is not None and (
+        row.monotonic_ns <= before.monotonic_ns or any(counts.get(lower, 0) < count for lower, count in before.buckets)
+    ):
+        raise ValueError("latency time/counters are not monotonic")
+    elapsed_ns = row.monotonic_ns - host.offset_ns - origin_ns
+    for lower, count in row.buckets:
+        latencies.append((host.host, row.pid, row.monotonic_ns, elapsed_ns, lower, count))
+    return row
 
 
 def read_manifest(path: pathlib.Path) -> MonitoringManifest:
@@ -188,6 +236,7 @@ def ingest(
         resources = sql.Rows(connection, "monitoring.resources", _RESOURCE_COLUMNS)
         threads = sql.Rows(connection, "monitoring.threads", _THREAD_COLUMNS)
         deliveries = sql.Rows(connection, "monitoring.deliveries", _DELIVERY_COLUMNS)
+        latencies = sql.Rows(connection, "monitoring.latencies", _LATENCY_COLUMNS)
         roles_seen = set()
         for host in manifest.hosts:
             if not set(host.resource_roles) <= set(host.roles) or (host.resources is None and host.resource_roles):
@@ -207,10 +256,14 @@ def ingest(
             if host.resources is not None:
                 _read_resources(path.parent / host.resources, host, origin_ns, resources, threads)
             if manifest.goodput and "subscriber" in host.roles:
-                _read_deliveries(path.parent / "subscriber.log", host, origin_ns, manifest.subscribers, deliveries)
+                # Send times are on the publisher's clock, which only one host shares.
+                shared = latencies if "publisher" in host.roles else None
+                _read_deliveries(
+                    path.parent / "subscriber.log", host, origin_ns, manifest.subscribers, deliveries, shared
+                )
         if "relay" not in roles_seen or (manifest.goodput and "subscriber" not in roles_seen):
             raise ValueError("monitoring manifest is missing a required role")
-        for rows in (resources, threads, deliveries):
+        for rows in (resources, threads, deliveries, latencies):
             rows.flush()
     except (OSError, ValueError, duckdb.Error) as error:
         raise TraceError(f"failed to analyze monitoring {path}: {error}") from error
@@ -229,6 +282,7 @@ def materialize(connection: duckdb.DuckDBPyConnection) -> None:
         "resource_summary",
         "thread_summary",
         "delivery_summary",
+        "latency_summary",
         "resource_intervals",
         "thread_intervals",
         "delivery_intervals",
@@ -271,5 +325,6 @@ def _write_summary(connection: duckdb.DuckDBPyConnection, path: pathlib.Path, ma
         "deliveries": deliveries,
         "total_goodput_bytes_per_second": (sum(row["bytes_per_second"] for row in deliveries) if deliveries else None),
         "total_objects_per_second": sum(row["objects_per_second"] for row in deliveries) if deliveries else None,
+        "latency": _records(connection, "monitoring.latency_summary"),
     }
     path.with_name("monitoring-summary.json").write_text(json.dumps(summary, indent=2) + "\n")

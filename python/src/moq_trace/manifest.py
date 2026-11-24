@@ -7,7 +7,7 @@ capture, so it lives outside both: the run layer must not import the ingesters.
 from __future__ import annotations
 
 import pathlib
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -83,6 +83,19 @@ class DeliverySample(ArtifactModel):
     connection: int = Field(ge=0)
     bytes: int = Field(ge=0)
     objects: int = Field(ge=0)
+
+
+class LatencySample(ArtifactModel):
+    """A subscriber's cumulative publish-to-receive histogram on its host clock.
+
+    Each bucket is `(lower_ns, count)`, at most 1.6% wide, and only non-empty
+    buckets are listed.
+    """
+
+    schema_version: Literal[1]
+    monotonic_ns: int = Field(ge=0)
+    pid: int = Field(gt=0)
+    buckets: tuple[tuple[Annotated[int, Field(ge=0)], Annotated[int, Field(gt=0)]], ...]
 
 
 class NetworkManifest(ArtifactModel):

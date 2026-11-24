@@ -16,6 +16,47 @@ pub struct Stats {
     subscriptions: AtomicU64,
     mismatches: AtomicU64,
     received: Vec<Received>,
+    latency: Vec<AtomicU64>,
+}
+
+/// Sub-buckets per power of two in the latency histogram, so a bucket is at most
+/// 1/64 (1.6%) wider than its lower bound.
+const SUB_BITS: u32 = 6;
+const SUB: u64 = 1 << SUB_BITS;
+/// Enough buckets for any `u64` nanoseconds.
+const BUCKETS: usize = ((64 - SUB_BITS as usize) + 1) * SUB as usize;
+
+/// The log-linear bucket of `ns`: exact below 64 ns, then 64 per power of two.
+fn bucket(ns: u64) -> usize {
+    if ns < SUB {
+        return ns as usize;
+    }
+    let shift = 63 - ns.leading_zeros() - SUB_BITS;
+    ((u64::from(shift) + 1) * SUB + ((ns >> shift) - SUB)) as usize
+}
+
+/// The smallest latency in `bucket`.
+fn lower_ns(bucket: usize) -> u64 {
+    let (octave, sub) = (bucket as u64 / SUB, bucket as u64 % SUB);
+    if octave == 0 {
+        sub
+    } else {
+        (SUB + sub) << (octave - 1)
+    }
+}
+
+/// This host's `CLOCK_MONOTONIC` in nanoseconds, the clock the resource collector
+/// and trace hooks use too.
+#[must_use]
+pub fn monotonic_ns() -> u64 {
+    let mut instant = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: instant points to a valid, writable timespec.
+    let status = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut instant) };
+    assert_eq!(status, 0, "CLOCK_MONOTONIC unavailable");
+    instant.tv_sec as u64 * 1_000_000_000 + instant.tv_nsec as u64
 }
 
 #[derive(Default)]
@@ -54,6 +95,7 @@ impl Stats {
             subscriptions: AtomicU64::default(),
             mismatches: AtomicU64::default(),
             received: (0..connections).map(|_| Received::default()).collect(),
+            latency: (0..BUCKETS).map(|_| AtomicU64::default()).collect(),
         }
     }
     /// Count a session as live until the returned guard drops.
@@ -80,6 +122,12 @@ impl Stats {
         self.received[connection]
             .objects
             .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record one frame's publish-to-receive time. It is meaningful only when the
+    /// publisher stamped it on this host's clock.
+    pub fn latency(&self, ns: u64) {
+        self.latency[bucket(ns)].fetch_add(1, Ordering::Relaxed);
     }
 
     /// Record one received group.
@@ -160,17 +208,11 @@ impl Stats {
         }
     }
 
-    /// Write cumulative received payload counters on the Linux host clock.
+    /// Write cumulative received payload counters and the cumulative latency
+    /// histogram, as `[lower_ns, count]` pairs of its non-empty buckets, on the
+    /// Linux host clock.
     pub fn report_delivery(&self) {
-        let mut instant = libc::timespec {
-            tv_sec: 0,
-            tv_nsec: 0,
-        };
-        // SAFETY: instant points to a valid, writable timespec. Linux's monotonic
-        // clock is also the clock used by the resource collector and trace hooks.
-        let status = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut instant) };
-        assert_eq!(status, 0, "CLOCK_MONOTONIC unavailable");
-        let ns = instant.tv_sec as u64 * 1_000_000_000 + instant.tv_nsec as u64;
+        let ns = monotonic_ns();
         let pid = std::process::id();
         for (connection, received) in self.received.iter().enumerate() {
             let bytes = received.bytes.load(Ordering::Relaxed);
@@ -179,6 +221,19 @@ impl Stats {
                 "MOQ_BENCH_DELIVERY {{\"schema_version\":1,\"monotonic_ns\":{ns},\"pid\":{pid},\"connection\":{connection},\"bytes\":{bytes},\"objects\":{objects}}}"
             );
         }
+        let buckets: Vec<String> = self
+            .latency
+            .iter()
+            .enumerate()
+            .filter_map(|(index, count)| {
+                let count = count.load(Ordering::Relaxed);
+                (count > 0).then(|| format!("[{},{count}]", lower_ns(index)))
+            })
+            .collect();
+        println!(
+            "MOQ_BENCH_LATENCY {{\"schema_version\":1,\"monotonic_ns\":{ns},\"pid\":{pid},\"buckets\":[{}]}}",
+            buckets.join(",")
+        );
     }
 
     fn counters(&self) -> Counters {
@@ -227,6 +282,25 @@ mod tests {
         assert_eq!(stats.received[1].objects.load(Ordering::Relaxed), 2);
         assert_eq!(stats.counters().bytes_recv, 600);
         assert_eq!(stats.counters().frames_recv, 3);
+    }
+
+    /// Every value falls in the bucket whose bounds hold it, and buckets are no
+    /// wider than 1/64 of their lower bound.
+    #[test]
+    fn latency_buckets_hold_their_values() {
+        for ns in (0..5000).chain([1_437_000, 3_000_000_000, u64::MAX]) {
+            let index = bucket(ns);
+            assert!(index < BUCKETS);
+            assert!(lower_ns(index) <= ns, "{ns}");
+            if index + 1 < BUCKETS {
+                let upper = lower_ns(index + 1);
+                assert!(ns < upper, "{ns}");
+                assert!(
+                    (upper - lower_ns(index)) * SUB <= lower_ns(index).max(SUB),
+                    "{ns}"
+                );
+            }
+        }
     }
 
     /// The connection gauge counts live sessions. A runner gates on `connections=N`
