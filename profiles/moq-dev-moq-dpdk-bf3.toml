@@ -29,14 +29,14 @@
 # The kernel never sees the relay's traffic, so a packet capture on the relay host
 # records none of it, and the kernel socket's drop counters stay at zero.
 checkout = "relays/moq-dev-moq"
-# Relay host setup, once, on winterfell01 (its checkout is /localtmp/moq-workspace):
-#   mkdir -m 700 /localtmp/moq-caps && cp /usr/bin/setpriv /localtmp/moq-caps/
-#   sudo setcap cap_net_raw,cap_net_admin,cap_ipc_lock,cap_sys_rawio+p /localtmp/moq-caps/setpriv
-relay_bin = "/localtmp/moq-caps/setpriv"
+# Relay host setup, once, on the DPU (its checkout is /home/jmp7jv/moq-workspace):
+#   mkdir -m 700 ~/moq-caps && cp /usr/bin/setpriv ~/moq-caps/
+#   sudo setcap cap_net_raw,cap_net_admin,cap_ipc_lock,cap_sys_rawio+p ~/moq-caps/setpriv
+relay_bin = "/home/jmp7jv/moq-caps/setpriv"
 relay_args = [
   "--inh-caps", "+net_raw,+net_admin,+ipc_lock,+sys_rawio",
   "--ambient-caps", "+net_raw,+net_admin,+ipc_lock,+sys_rawio",
-  "--", "/localtmp/moq-workspace/relays/moq-dev-moq/target/dpdk/release/moq-relay",
+  "--", "/home/jmp7jv/moq-workspace/relays/moq-dev-moq/target/dpdk/release/moq-relay",
   "--server-bind", "[::]:{port}",
   "--server-backend", "quinn",
   "--server-version", "{protocol}",
