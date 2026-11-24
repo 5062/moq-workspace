@@ -154,9 +154,7 @@ def plot_sweep(path: pathlib.Path, subtitle: str, dimension: str, runs: list[tup
         axes[0].text(0.5, 0.5, "unavailable", transform=axes[0].transAxes, ha="center", color="gray")
     axes[0].set_title("End-to-end latency (ms)")
     relay = [next((row for row in summary["resources"] if row["role"] == "relay"), None) for _, summary, _ in points]
-    for key, label in (("mean_cpu_cores", "process"), ("busiest_thread_mean_cpu_cores", "busiest thread")):
-        axes[1].plot(values, [row and row[key] for row in relay], marker="o", label=label)
-    axes[1].legend()
+    axes[1].plot(values, [row and row["mean_cpu_cores"] for row in relay], marker="o")
     axes[1].set_title("Mean relay CPU (cores)")
     delivered = [summary["total_goodput_bytes_per_second"] for _, summary, _ in points]
     axes[2].plot(values, [rate and rate * 8 / 1e6 for rate in delivered], marker="o", label="delivered")
