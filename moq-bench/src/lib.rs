@@ -48,6 +48,42 @@ pub fn versions() -> Versions {
     Versions::from(vec![version])
 }
 
+/// Raise this process's open-file limit to its hard limit, and check that it
+/// leaves room for `sockets` more files.
+///
+/// Every client session binds its own UDP socket, so a peer with a thousand
+/// sessions outgrows the usual soft limit of 1024 and fails with a bind error
+/// partway through connecting.
+pub fn raise_open_file_limit(sockets: u64) -> anyhow::Result<()> {
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: limit points to a valid, writable rlimit.
+    anyhow::ensure!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0,
+        "getrlimit failed: {}",
+        std::io::Error::last_os_error()
+    );
+    if limit.rlim_cur < limit.rlim_max {
+        limit.rlim_cur = limit.rlim_max;
+        // SAFETY: limit is a valid rlimit whose soft value does not exceed its hard one.
+        anyhow::ensure!(
+            unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) } == 0,
+            "setrlimit failed: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+    // Room for the runtime, logs, and TLS beside the sessions' sockets.
+    let needed = sockets.saturating_add(256);
+    anyhow::ensure!(
+        limit.rlim_cur >= needed,
+        "{sockets} sessions need about {needed} open files, but the hard limit is {}; raise `nofile` for this user",
+        limit.rlim_cur
+    );
+    Ok(())
+}
+
 /// The synthetic object shape a publisher emits.
 ///
 /// Every frame in a group is exactly `frame_size` bytes, the keyframe included,
@@ -78,5 +114,25 @@ impl Default for Shape {
             frame_size: 16_384,
             group_size: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_file_limit_rises_to_the_hard_limit() {
+        raise_open_file_limit(1).unwrap();
+        let mut limit = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: limit points to a valid, writable rlimit.
+        assert_eq!(
+            unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+            0
+        );
+        assert_eq!(limit.rlim_cur, limit.rlim_max);
     }
 }

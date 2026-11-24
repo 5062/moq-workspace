@@ -16,7 +16,7 @@ use std::time::Duration;
 use clap::Parser;
 use moq_bench::object::TRACK;
 use moq_bench::stats::Stats;
-use moq_bench::{Shape, install_crypto, publish, subscribe, versions};
+use moq_bench::{Shape, install_crypto, publish, raise_open_file_limit, subscribe, versions};
 use moq_net::Origin;
 use moq_net::announce;
 use moq_net::broadcast;
@@ -113,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
         args.connections == 1 || args.client.bind.port() == 0,
         "--client-bind needs port 0 when --connections is above 1"
     );
+    raise_open_file_limit(args.connections)?;
     let mut config = args.client.clone();
     config.version = versions().iter().copied().collect();
 
