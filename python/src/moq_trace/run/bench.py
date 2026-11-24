@@ -203,11 +203,24 @@ def experiment_config(
     return ExperimentConfig.model_validate({**launch, **settings, "hosts": hosts, "output": output})
 
 
-def default_output() -> pathlib.Path:
-    """A fresh timestamped directory for one invocation's runs."""
+def default_output(relays: Sequence[str], settings: Mapping[str, Any], sweep: Sweep | None = None) -> pathlib.Path:
+    """A fresh directory named for its time, its relays, and the settings given explicitly.
 
-    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
-    return pathlib.Path("artifacts") / f"bench-{stamp}"
+    Such as `artifacts/20261124T110306Z-moq-dev-moq-dpdk-subscribers-500`. Switches
+    appear as their flag or its `no-` form; settings that are not numbers or
+    switches, such as paths and hosts, are left out of the name.
+    """
+
+    parts = [datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ"), *relays]
+    for name, value in settings.items():
+        flag = name.replace("_", "-")
+        if isinstance(value, bool):
+            parts.append(flag if value else f"no-{flag}")
+        elif isinstance(value, int | float):
+            parts.append(f"{flag}-{value}")
+    if sweep is not None:
+        parts.append(f"{sweep.dimension.replace('_', '-')}-{'-'.join(map(str, sweep.values))}")
+    return pathlib.Path("artifacts") / "-".join(parts)
 
 
 async def bench(

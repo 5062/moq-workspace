@@ -313,6 +313,10 @@ def _run(args: argparse.Namespace) -> None:
 
         names = [*_BENCH_SETTINGS, *_BENCH_SWITCHES]
         settings = {name: getattr(args, name) for name in names if getattr(args, name) is not None}
+        # Named before `trace` and `hosts` join the settings: only a departure from tracing names the directory.
+        output = args.output or default_output(
+            args.relay, settings if args.trace else {**settings, "trace": False}, args.sweep
+        )
         settings["trace"] = args.trace
         if args.hosts is not None:
             settings["hosts"] = _model(args.hosts, Hosts)
@@ -321,7 +325,7 @@ def _run(args: argparse.Namespace) -> None:
                 bench(
                     load(args.suite),
                     args.relay,
-                    args.output or default_output(),
+                    output,
                     settings,
                     dict(args.checkout),
                     args.sweep,
