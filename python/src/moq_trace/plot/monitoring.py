@@ -133,17 +133,19 @@ def plot_monitoring_comparison(path: pathlib.Path, subtitle: str, runs: list[Plo
     save_figure(fig, path, f"Resources and delivery comparison | {subtitle}")
 
 
-def plot_sweep(path: pathlib.Path, subtitle: str, dimension: str, runs: list[tuple[int, pathlib.Path]]) -> None:
+def plot_sweep(path: pathlib.Path, subtitle: str, dimension: str, runs: list[tuple[int, pathlib.Path, float]]) -> None:
     """End-to-end latency, relay CPU, and delivery at each swept value, from each run's monitoring summary.
 
-    Needs no trace, so untraced sweeps get it too. Latency is absent where the
-    publisher ran on another host than the subscriber.
+    Each run is its swept value, its summary, and the payload bits per second
+    the subscribers should receive together. Needs no trace, so untraced sweeps
+    get it too. Latency is absent where the publisher ran on another host than
+    the subscriber.
     """
 
-    points = sorted((value, json.loads(summary.read_text())) for value, summary in runs)
-    values = [value for value, _ in points]
+    points = sorted((value, json.loads(summary.read_text()), expected) for value, summary, expected in runs)
+    values = [value for value, _, _ in points]
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    latency = [(value, summary["latency"][0]) for value, summary in points if summary["latency"]]
+    latency = [(value, summary["latency"][0]) for value, summary, _ in points if summary["latency"]]
     for key, label in (("p50_ns", "p50"), ("p90_ns", "p90"), ("p99_ns", "p99"), ("p999_ns", "p99.9")):
         axes[0].plot([v for v, _ in latency], [row[key] / 1e6 for _, row in latency], marker="o", label=label)
     if latency:
@@ -151,13 +153,16 @@ def plot_sweep(path: pathlib.Path, subtitle: str, dimension: str, runs: list[tup
     else:
         axes[0].text(0.5, 0.5, "unavailable", transform=axes[0].transAxes, ha="center", color="gray")
     axes[0].set_title("End-to-end latency (ms)")
-    relay = [next((row for row in summary["resources"] if row["role"] == "relay"), None) for _, summary in points]
+    relay = [next((row for row in summary["resources"] if row["role"] == "relay"), None) for _, summary, _ in points]
     for key, label in (("mean_cpu_cores", "process"), ("busiest_thread_mean_cpu_cores", "busiest thread")):
         axes[1].plot(values, [row and row[key] for row in relay], marker="o", label=label)
     axes[1].legend()
     axes[1].set_title("Mean relay CPU (cores)")
-    axes[2].plot(values, [summary["total_objects_per_second"] for _, summary in points], marker="o")
-    axes[2].set_title("Delivered objects/s")
+    delivered = [summary["total_goodput_bytes_per_second"] for _, summary, _ in points]
+    axes[2].plot(values, [rate and rate * 8 / 1e6 for rate in delivered], marker="o", label="delivered")
+    axes[2].plot(values, [expected / 1e6 for _, _, expected in points], "--", color="gray", label="expected")
+    axes[2].legend()
+    axes[2].set_title("Payload throughput (Mbit/s)")
     for axis in axes:
         axis.set_xlabel(dimension)
         axis.set_xticks(values)

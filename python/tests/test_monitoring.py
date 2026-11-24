@@ -163,7 +163,7 @@ class MonitoringTests(unittest.TestCase):
         monitoring.write_summary(self.path)
         summary = self.root / "monitoring-summary.json"
         output = self.root / "plots/subscribers.png"
-        plot_sweep(output, "test", "subscribers", [(4, summary), (1, summary)])
+        plot_sweep(output, "test", "subscribers", [(4, summary, 4000.0), (1, summary, 1000.0)])
         self.assertGreater(output.stat().st_size, 1000)
 
     def test_latency_reset_and_missing_histograms_are_rejected(self):

@@ -277,8 +277,8 @@ class BenchTests(unittest.TestCase):
                 "alpha",
                 "subscribers",
                 [
-                    (1, out / "alpha/subscribers-1/monitoring-summary.json"),
-                    (4, out / "alpha/subscribers-4/monitoring-summary.json"),
+                    (1, out / "alpha/subscribers-1/monitoring-summary.json", 60 * 16_384 * 8 * 1),
+                    (4, out / "alpha/subscribers-4/monitoring-summary.json", 60 * 16_384 * 8 * 4),
                 ],
             )
 

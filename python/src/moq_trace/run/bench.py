@@ -313,10 +313,14 @@ async def bench(
                 await asyncio.to_thread(snapshot_bench, directory, databases)
                 await asyncio.to_thread(render, directory)
         # Monitoring summaries exist with or without a trace, so untraced sweeps get this figure too.
+        # Every subscriber should receive every published payload bit.
+        expected = {
+            (name, value): config.fps * config.object_size * 8 * config.subscribers for name, value, config in runs
+        }
         for name in relays if sweep is not None else ():
             # An untraced run returns its directory, a traced one its database.
             summaries = [
-                (result.value, summary)
+                (result.value, summary, expected[name, result.value])
                 for result in results
                 if result.relay == name and result.path is not None and result.value is not None
                 if (
