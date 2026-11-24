@@ -14,7 +14,7 @@ from moq_trace.analysis.network import capture_statistics
 from moq_trace.capture import resources
 from moq_trace.errors import TraceError
 from moq_trace.manifest import MonitoringHost, MonitoringManifest, ResourceSample
-from moq_trace.plot.monitoring import plot_monitoring
+from moq_trace.plot.monitoring import plot_monitoring, plot_sweep
 
 
 class MonitoringTests(unittest.TestCase):
@@ -156,6 +156,15 @@ class MonitoringTests(unittest.TestCase):
             "SELECT covered_seconds, frames, p50_ns, p90_ns, p99_ns, p999_ns, max_ns FROM monitoring.latency_summary"
         ).fetchone()
         self.assertEqual(row, (4.0, 45, 1_000_000, 2_000_000, 3_000_000, 3_000_000, 3_000_000))
+
+    def test_sweep_figure_renders_from_summaries(self):
+        self._share_publisher_host()
+        self._ingest()
+        monitoring.write_summary(self.path)
+        summary = self.root / "monitoring-summary.json"
+        output = self.root / "plots/subscribers.png"
+        plot_sweep(output, "test", "subscribers", [(4, summary), (1, summary)])
+        self.assertGreater(output.stat().st_size, 1000)
 
     def test_latency_reset_and_missing_histograms_are_rejected(self):
         self._share_publisher_host()

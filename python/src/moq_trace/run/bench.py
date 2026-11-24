@@ -246,6 +246,7 @@ async def bench(
     # Deferred like the CLI's own imports: the runner pulls in the analysis stack,
     # which parsing the command line does not need.
     from ..analysis.comparison import snapshot_bench
+    from ..plot.monitoring import plot_sweep
     from ..plot.render import render
     from .experiment import run
     from .ssh import SshPool
@@ -311,4 +312,19 @@ async def bench(
                 _log.info("rendering the comparison into %s", directory / "plots")
                 await asyncio.to_thread(snapshot_bench, directory, databases)
                 await asyncio.to_thread(render, directory)
+        # Monitoring summaries exist with or without a trace, so untraced sweeps get this figure too.
+        for name in relays if sweep is not None else ():
+            # An untraced run returns its directory, a traced one its database.
+            summaries = [
+                (result.value, summary)
+                for result in results
+                if result.relay == name and result.path is not None and result.value is not None
+                if (
+                    summary := (result.path if result.path.is_dir() else result.path.parent) / "monitoring-summary.json"
+                ).exists()
+            ]
+            if len(summaries) >= 2:
+                figure = output / name / "plots" / f"{sweep.dimension.replace('_', '-')}.png"
+                _log.info("rendering the sweep into %s", figure)
+                await asyncio.to_thread(plot_sweep, figure, name, sweep.dimension, summaries)
     return results

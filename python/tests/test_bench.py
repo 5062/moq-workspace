@@ -224,12 +224,15 @@ class BenchTests(unittest.TestCase):
             async def run(config, _pool):
                 if config.output.parent.name == "beta" and config.subscribers == 4:
                     raise RuntimeError("relay exited")
+                config.output.mkdir(parents=True)
+                (config.output / "monitoring-summary.json").write_text("{}")
                 return config.output / "analysis.duckdb"
 
             with (
                 mock.patch("moq_trace.run.experiment.run", side_effect=run) as runner,
                 mock.patch("moq_trace.analysis.comparison.snapshot_bench") as snapshot,
                 mock.patch("moq_trace.plot.render.render") as render,
+                mock.patch("moq_trace.plot.monitoring.plot_sweep") as plot_sweep,
             ):
                 results = asyncio.run(
                     bench.bench(
@@ -268,6 +271,16 @@ class BenchTests(unittest.TestCase):
                 },
             )
             render.assert_called_once_with(root / "out/alpha")
+            # The sweep figure reads monitoring summaries, which untraced runs have too.
+            plot_sweep.assert_called_once_with(
+                root / "out/alpha/plots/subscribers.png",
+                "alpha",
+                "subscribers",
+                [
+                    (1, out / "alpha/subscribers-1/monitoring-summary.json"),
+                    (4, out / "alpha/subscribers-4/monitoring-summary.json"),
+                ],
+            )
 
     def test_a_swept_dimension_cannot_also_be_set(self) -> None:
         with self.assertRaisesRegex(ValueError, "subscribers is swept"):
