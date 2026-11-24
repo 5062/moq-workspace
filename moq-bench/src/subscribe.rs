@@ -26,7 +26,15 @@ pub async fn drain(
         let mut frames: u64 = 0;
         let mut mismatched = false;
 
-        while let Some(frame) = group.read_frame().await? {
+        loop {
+            let frame = match group.read_frame().await {
+                Ok(Some(frame)) => frame,
+                Ok(None) => break,
+                // A reader that falls behind loses aged-out groups but keeps the
+                // subscription, so the cut group counts as short below.
+                Err(moq_net::Error::Old) => break,
+                Err(err) => return Err(err.into()),
+            };
             let len = frame.payload.len() as u64;
             if frames == 0 {
                 shape = object::decode(&frame.payload);
@@ -43,7 +51,8 @@ pub async fn drain(
 
         // A group that never showed a keyframe lost its opening frames, which a relay
         // can do by joining a group partway. A group with fewer frames than its
-        // keyframe declared was cut short, by a relay dropping it or by teardown.
+        // keyframe declared was cut short, by a relay dropping it, by aging out
+        // behind a slow reader, or by teardown.
         // Neither is broken framing, so both count apart from `mismatches`, which is
         // kept for frames the path altered.
         match shape {
